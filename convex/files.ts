@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { getAuthenticatedUser, validateFileUpload, validateStringLength } from "./auth.helpers";
+import { getAuthenticatedUser, getOptionalUser, validateFileUpload, validateStringLength } from "./auth.helpers";
 
 export const generateUploadUrl = mutation(async (ctx) => {
   // Require authentication for upload URLs
@@ -51,11 +51,11 @@ export const saveFile = mutation({
 export const getFilesForPage = query({
   args: { pageId: v.id("pages") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
 
-    // Verify user has access to the page
     const page = await ctx.db.get(args.pageId);
-    if (!page) throw new Error("Page not found");
+    if (!page) return [];
 
     if (page.ownerId !== user._id) {
       const collab = await ctx.db

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import {
   getAuthenticatedUser,
+  getOptionalUser,
   validateEmail,
   validateStringLength,
 } from "./auth.helpers";
@@ -11,7 +12,8 @@ const MAX_TITLE_LENGTH = 100;
 export const getPage = query({
   args: { pageId: v.id("pages") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return null;
     const page = await ctx.db.get(args.pageId);
     if (!page) return null;
 
@@ -31,7 +33,8 @@ export const getPage = query({
 export const getUserPages = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
     return await ctx.db
       .query("pages")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
@@ -43,7 +46,8 @@ export const getUserPages = query({
 export const getSharedPages = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
     const collabs = await ctx.db
       .query("pageCollaborators")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
@@ -59,7 +63,8 @@ export const getSharedPages = query({
 export const getJournalPage = query({
   args: { date: v.string() },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return null;
     return await ctx.db
       .query("pages")
       .withIndex("by_journal", (q) =>
@@ -72,7 +77,8 @@ export const getJournalPage = query({
 export const getJournalPages = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
     return await ctx.db
       .query("pages")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
@@ -222,6 +228,27 @@ export const updateYjsState = mutation({
   },
 });
 
+export const updateContent = mutation({
+  args: { pageId: v.id("pages"), content: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+
+    // Check access
+    if (page.ownerId !== user._id) {
+      const collab = await ctx.db
+        .query("pageCollaborators")
+        .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+        .filter((q) => q.eq(q.field("userId"), user._id))
+        .first();
+      if (!collab) throw new Error("Not authorized");
+    }
+
+    await ctx.db.patch(args.pageId, { content: args.content, updatedAt: Date.now() });
+  },
+});
+
 export const sharePage = mutation({
   args: {
     pageId: v.id("pages"),
@@ -240,7 +267,7 @@ export const sharePage = mutation({
 
     const targetUser = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .withIndex("email", (q) => q.eq("email", args.email))
       .first();
     if (!targetUser) throw new Error("No account found for that email");
     if (targetUser._id === user._id) throw new Error("Cannot share with yourself");
@@ -296,9 +323,10 @@ export const unsharePage = mutation({
 export const getCollaborators = query({
   args: { pageId: v.id("pages") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
     const page = await ctx.db.get(args.pageId);
-    if (!page) throw new Error("Page not found");
+    if (!page) return [];
 
     // Only owner or collaborator can see collaborator list
     if (page.ownerId !== user._id) {
@@ -325,7 +353,8 @@ export const getCollaborators = query({
 export const searchPages = query({
   args: { query: v.string() },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
     validateStringLength(args.query, 200, "Search query");
     const searchLower = args.query.toLowerCase();
 
@@ -346,5 +375,43 @@ export const searchPages = query({
     return allPages.filter((p) =>
       p!.title.toLowerCase().includes(searchLower)
     );
+  },
+});
+
+export const getAllPagesForGraph = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return { pages: [], links: [] };
+    const owned = await ctx.db
+      .query("pages")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .collect();
+    const collabs = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const shared = await Promise.all(collabs.map((c) => ctx.db.get(c.pageId)));
+    const allPages = [...owned, ...shared.filter(Boolean)];
+
+    // Get all backlinks between these pages
+    const pageIds = new Set(allPages.map((p) => p!._id));
+    const allBacklinks: { source: string; target: string }[] = [];
+    for (const page of allPages) {
+      const links = await ctx.db
+        .query("backlinks")
+        .withIndex("by_source", (q) => q.eq("sourcePageId", page!._id))
+        .collect();
+      for (const link of links) {
+        if (pageIds.has(link.targetPageId)) {
+          allBacklinks.push({
+            source: link.sourcePageId,
+            target: link.targetPageId,
+          });
+        }
+      }
+    }
+
+    return { pages: allPages, links: allBacklinks };
   },
 });

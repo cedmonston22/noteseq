@@ -48,8 +48,8 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
             aria-label={title}
             className="relative z-10 w-full max-w-lg rounded-xl shadow-2xl"
             style={{
-              background: "#1A1A22",
-              border: "1px solid rgba(255,255,255,0.06)",
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-subtle)",
             }}
             initial={{ opacity: 0, scale: 0.92, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -60,18 +60,18 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
             {/* Header */}
             <div
               className="flex items-center justify-between px-6 py-4"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+              style={{ borderBottom: "1px solid var(--border-subtle)" }}
             >
               <h2
                 className="text-lg font-semibold"
-                style={{ color: "#E8E8ED" }}
+                style={{ color: "var(--text-primary)" }}
               >
                 {title}
               </h2>
               <button
                 onClick={onClose}
-                className="rounded-lg p-1.5 transition-colors hover:bg-white/5"
-                style={{ color: "#66667A" }}
+                className="rounded-lg p-1.5 transition-colors hover:bg-[rgba(128,128,128,0.1)]"
+                style={{ color: "var(--text-muted)" }}
               >
                 <X size={18} />
               </button>

@@ -1,0 +1,6 @@
+{
+  "name": "noteseq-yjs-server",
+  "scripts": {
+    "start": "node yjs-server.js"
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -17,22 +17,57 @@ import SlashCommandMenu from "./SlashCommandMenu";
 
 const lowlight = createLowlight(common);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyDoc = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyProvider = any;
+
 interface EditorProps {
   content?: Record<string, unknown>;
   onUpdate?: (content: Record<string, unknown>) => void;
   editable?: boolean;
+  yjsDoc?: AnyDoc | null;
+  yjsProvider?: AnyProvider | null;
 }
 
 export default function NoteEditor({
   content,
   onUpdate,
   editable = true,
+  yjsDoc,
+  yjsProvider,
 }: EditorProps) {
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
   const [slashFilter, setSlashFilter] = useState("");
   const slashRangeRef = useRef<{ from: number; to: number } | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLoadingContent = useRef(false);
+  const hasLoadedContent = useRef(false);
+
+  // Debounced onUpdate: waits 1500ms after the last keystroke before calling
+  const debouncedOnUpdate = useMemo(() => {
+    if (!onUpdate) return undefined;
+    return (content: Record<string, unknown>) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        onUpdate(content);
+      }, 1500);
+    };
+  }, [onUpdate]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -68,9 +103,22 @@ export default function NoteEditor({
       },
     },
     onUpdate: ({ editor: ed }) => {
-      onUpdate?.(ed.getJSON() as Record<string, unknown>);
+      if (isLoadingContent.current) return;
+      debouncedOnUpdate?.(ed.getJSON() as Record<string, unknown>);
     },
   });
+
+  // Update editor when content arrives from server
+  useEffect(() => {
+    if (editor && content && !hasLoadedContent.current) {
+      isLoadingContent.current = true;
+      editor.commands.setContent(content);
+      hasLoadedContent.current = true;
+      setTimeout(() => {
+        isLoadingContent.current = false;
+      }, 50);
+    }
+  }, [editor, content]);
 
   // Slash command handling
   const handleKeyDown = useCallback(
@@ -181,12 +229,8 @@ export default function NoteEditor({
           editor.chain().focus().setHorizontalRule().run();
           break;
         case "image":
-          // For now, insert a placeholder image
-          editor
-            .chain()
-            .focus()
-            .setImage({ src: "https://placehold.co/800x400/1A1A2E/6366F1?text=Image" })
-            .run();
+          // Open file picker to select an image
+          fileInputRef.current?.click();
           break;
         case "callout":
           // Insert as a blockquote styled as callout
@@ -201,10 +245,36 @@ export default function NoteEditor({
     [editor]
   );
 
+  // Handle image file selection
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!editor) return;
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Create a local object URL as preview
+      const objectUrl = URL.createObjectURL(file);
+      editor.chain().focus().setImage({ src: objectUrl, alt: file.name }).run();
+
+      // Reset the input so the same file can be selected again
+      e.target.value = "";
+    },
+    [editor]
+  );
+
   if (!editor) return null;
 
   return (
     <div ref={editorContainerRef} className="relative">
+      {/* Hidden file input for image uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+        aria-hidden="true"
+      />
       <EditorContent
         editor={editor}
         className="mx-auto max-w-3xl px-8 py-8"

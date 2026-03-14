@@ -1,20 +1,18 @@
 import { QueryCtx, MutationCtx } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
  * Get the authenticated user from the Convex auth context.
+ * Uses @convex-dev/auth's getAuthUserId which returns the user _id directly.
  * Throws if not authenticated or user record not found.
  */
 export async function getAuthenticatedUser(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
     throw new Error("Not authenticated");
   }
 
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_googleId", (q) => q.eq("googleId", identity.subject))
-    .first();
-
+  const user = await ctx.db.get(userId);
   if (!user) {
     throw new Error("User not found");
   }
@@ -26,13 +24,10 @@ export async function getAuthenticatedUser(ctx: QueryCtx | MutationCtx) {
  * Try to get the authenticated user, return null if not authenticated.
  */
 export async function getOptionalUser(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) return null;
+  const userId = await getAuthUserId(ctx);
+  if (!userId) return null;
 
-  return await ctx.db
-    .query("users")
-    .withIndex("by_googleId", (q) => q.eq("googleId", identity.subject))
-    .first();
+  return await ctx.db.get(userId);
 }
 
 /**

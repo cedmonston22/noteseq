@@ -2,9 +2,13 @@
 
 import React, { useState } from "react";
 import { Link, Trash2, UserPlus } from "lucide-react";
+import { useConvexAuth, useQuery, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import Modal from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 import { generateCollabColor } from "@/lib/utils";
+import { useToast } from "@/components/ui/Toast";
 
 interface Collaborator {
   id: string;
@@ -12,37 +16,66 @@ interface Collaborator {
   email: string;
 }
 
-const PLACEHOLDER_COLLABORATORS: Collaborator[] = [
-  { id: "1", name: "Alice Chen", email: "alice@example.com" },
-  { id: "2", name: "Bob Rivera", email: "bob@example.com" },
-  { id: "3", name: "Charlie Kim", email: "charlie@example.com" },
-];
-
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
+  pageId?: string;
 }
 
-export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, pageId }: ShareModalProps) {
   const [email, setEmail] = useState("");
-  const [collaborators, setCollaborators] = useState<Collaborator[]>(
-    PLACEHOLDER_COLLABORATORS
+  const [localCollaborators, setLocalCollaborators] = useState<Collaborator[]>(
+    []
   );
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
-  const handleInvite = () => {
+  const { isAuthenticated } = useConvexAuth();
+  const convexPageId = pageId as Id<"pages"> | undefined;
+  const isConnected = isAuthenticated && !!convexPageId;
+
+  const collaborators = useQuery(
+    api.pages.getCollaborators,
+    isConnected ? { pageId: convexPageId! } : "skip"
+  );
+  const sharePageMutation = useMutation(api.pages.sharePage);
+  const unsharePageMutation = useMutation(api.pages.unsharePage);
+
+  const handleInvite = async () => {
     if (!email.trim()) return;
-    const newCollab: Collaborator = {
-      id: String(Date.now()),
-      name: email.split("@")[0],
-      email: email.trim(),
-    };
-    setCollaborators((prev) => [...prev, newCollab]);
-    setEmail("");
+
+    if (isConnected) {
+      try {
+        await sharePageMutation({ pageId: convexPageId!, email: email.trim() });
+        toast("Collaborator invited successfully", "success");
+        setEmail("");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to invite";
+        toast(message, "error");
+      }
+    } else {
+      const newCollab: Collaborator = {
+        id: String(Date.now()),
+        name: email.split("@")[0],
+        email: email.trim(),
+      };
+      setLocalCollaborators((prev) => [...prev, newCollab]);
+      setEmail("");
+    }
   };
 
-  const handleRemove = (id: string) => {
-    setCollaborators((prev) => prev.filter((c) => c.id !== id));
+  const handleRemove = async (id: string) => {
+    if (isConnected) {
+      try {
+        await unsharePageMutation({ pageId: convexPageId!, userId: id as Id<"users"> });
+        toast("Collaborator removed", "success");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to remove";
+        toast(message, "error");
+      }
+    } else {
+      setLocalCollaborators((prev) => prev.filter((c) => c.id !== id));
+    }
   };
 
   const handleCopyLink = async () => {
@@ -55,6 +88,15 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
     }
   };
 
+  // Build a unified list for rendering
+  const displayCollaborators: { id: string; name: string; email: string }[] = isConnected
+    ? (collaborators ?? []).filter(Boolean).map((u) => ({
+        id: u!._id,
+        name: u!.name ?? u!.email ?? "Unknown",
+        email: u!.email ?? "",
+      }))
+    : localCollaborators;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Share this page">
       {/* Invite input */}
@@ -65,11 +107,11 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-          className="flex-1 rounded-lg px-4 py-2.5 text-sm outline-none transition-all placeholder:text-[#66667A]"
+          className="flex-1 rounded-lg px-4 py-2.5 text-sm outline-none transition-all placeholder:text-[var(--text-muted)]"
           style={{
-            background: "#12121A",
-            color: "#E8E8ED",
-            border: "1px solid rgba(255,255,255,0.06)",
+            background: "var(--bg-surface)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border-subtle)",
           }}
           onFocus={(e) => {
             e.currentTarget.style.borderColor = "rgba(212,168,67,0.5)";
@@ -77,7 +119,7 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
               "0 0 0 3px rgba(212,168,67,0.15)";
           }}
           onBlur={(e) => {
-            e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+            e.currentTarget.style.borderColor = "var(--border-subtle)";
             e.currentTarget.style.boxShadow = "none";
           }}
         />
@@ -95,12 +137,12 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
       <div className="mt-5 space-y-1">
         <p
           className="mb-2 text-xs font-medium uppercase tracking-wider"
-          style={{ color: "#66667A" }}
+          style={{ color: "var(--text-muted)" }}
         >
           Collaborators
         </p>
         <div className="max-h-52 space-y-1 overflow-y-auto">
-          {collaborators.map((collab, index) => (
+          {displayCollaborators.map((collab, index) => (
             <div
               key={collab.id}
               className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-white/[0.03]"
@@ -116,13 +158,13 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
               <div className="min-w-0 flex-1">
                 <p
                   className="truncate text-sm font-medium"
-                  style={{ color: "#E8E8ED" }}
+                  style={{ color: "var(--text-primary)" }}
                 >
                   {collab.name}
                 </p>
                 <p
                   className="truncate text-xs"
-                  style={{ color: "#66667A" }}
+                  style={{ color: "var(--text-muted)" }}
                 >
                   {collab.email}
                 </p>
@@ -138,8 +180,8 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
               </button>
             </div>
           ))}
-          {collaborators.length === 0 && (
-            <p className="py-4 text-center text-sm" style={{ color: "#66667A" }}>
+          {displayCollaborators.length === 0 && (
+            <p className="py-4 text-center text-sm" style={{ color: "var(--text-muted)" }}>
               No collaborators yet. Invite someone above.
             </p>
           )}
@@ -149,7 +191,7 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
       {/* Copy link */}
       <div
         className="mt-5 pt-4"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+        style={{ borderTop: "1px solid var(--border-subtle)" }}
       >
         <button
           onClick={handleCopyLink}
@@ -157,9 +199,9 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
             "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all",
           )}
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: copied ? "#10B981" : "#A0A0B0",
-            border: "1px solid rgba(255,255,255,0.06)",
+            background: "rgba(128,128,128,0.08)",
+            color: copied ? "#10B981" : "var(--text-secondary)",
+            border: "1px solid var(--border-subtle)",
           }}
         >
           <Link size={15} />

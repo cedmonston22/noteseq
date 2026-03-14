@@ -1,15 +1,15 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { getAuthenticatedUser } from "./auth.helpers";
+import { getAuthenticatedUser, getOptionalUser } from "./auth.helpers";
 
 export const getBacklinksForPage = query({
   args: { pageId: v.id("pages") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
 
-    // Verify user has access to the page
     const page = await ctx.db.get(args.pageId);
-    if (!page) throw new Error("Page not found");
+    if (!page) return [];
 
     if (page.ownerId !== user._id) {
       const collab = await ctx.db
@@ -17,7 +17,7 @@ export const getBacklinksForPage = query({
         .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
         .filter((q) => q.eq(q.field("userId"), user._id))
         .first();
-      if (!collab) throw new Error("Not authorized");
+      if (!collab) return [];
     }
 
     const links = await ctx.db

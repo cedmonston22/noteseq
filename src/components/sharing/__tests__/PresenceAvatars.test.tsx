@@ -17,12 +17,10 @@ vi.mock("@/components/ui/Tooltip", () => ({
 }));
 
 describe("PresenceAvatars", () => {
-  it("renders default dummy users", () => {
+  it("renders empty when no users provided", () => {
     render(<PresenceAvatars />);
-    // Default users: Alice, Bob, Charlie
-    expect(screen.getByText("A")).toBeInTheDocument();
-    expect(screen.getByText("B")).toBeInTheDocument();
-    expect(screen.getByText("C")).toBeInTheDocument();
+    // No default users — should render empty container
+    expect(screen.queryByText("A")).not.toBeInTheDocument();
   });
 
   it("shows correct initials for each user", () => {

@@ -137,4 +137,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     icon: "Image",
     category: "Media",
   },
+  {
+    id: "import",
+    label: "Import",
+    description: "Import from file",
+    icon: "Upload",
+    category: "Advanced",
+  },
 ];

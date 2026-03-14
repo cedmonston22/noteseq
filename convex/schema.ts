@@ -1,16 +1,25 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
+  ...authTables,
   users: defineTable({
-    name: v.string(),
-    email: v.string(),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
-    googleId: v.string(),
-    createdAt: v.number(),
+    googleId: v.optional(v.string()),
+    createdAt: v.optional(v.number()),
+    // Fields required by @convex-dev/auth
+    image: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
   })
-    .index("by_email", ["email"])
-    .index("by_googleId", ["googleId"]),
+    .index("email", ["email"])
+    .index("by_googleId", ["googleId"])
+    .index("phone", ["phone"]),
 
   pages: defineTable({
     title: v.string(),
@@ -19,6 +28,7 @@ export default defineSchema({
     isJournal: v.boolean(),
     journalDate: v.optional(v.string()),
     isShared: v.boolean(),
+    content: v.optional(v.string()), // JSON-serialized TipTap content
     yjsState: v.optional(v.bytes()),
     createdAt: v.number(),
     updatedAt: v.number(),

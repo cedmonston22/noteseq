@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Space_Mono } from "next/font/google";
+import ConvexClientProvider from "@/components/providers/ConvexClientProvider";
+import { ThemeProvider } from "@/lib/useTheme";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -24,12 +26,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${outfit.variable} ${spaceMono.variable} min-h-screen bg-[#111116] text-[#E8E8ED] antialiased`}
-        style={{ fontFamily: "var(--font-outfit), var(--font-sans)" }}
+        className={`${outfit.variable} ${spaceMono.variable} min-h-screen antialiased`}
+        style={{ fontFamily: "var(--font-outfit), var(--font-sans)", background: "var(--bg-primary)", color: "var(--text-primary)" }}
       >
-        {children}
+        <ConvexClientProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </ConvexClientProvider>
       </body>
     </html>
   );

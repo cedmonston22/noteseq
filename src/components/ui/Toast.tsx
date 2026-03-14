@@ -72,9 +72,9 @@ function ToastNotification({
       aria-live="polite"
       className="pointer-events-auto flex items-center gap-3 rounded-lg px-4 py-3 shadow-2xl backdrop-blur-sm"
       style={{
-        background: "#1A1A22",
+        background: "var(--bg-elevated)",
         borderLeft: `4px solid ${config.color}`,
-        border: `1px solid rgba(255,255,255,0.06)`,
+        border: `1px solid var(--border-subtle)`,
         borderLeftColor: config.color,
         borderLeftWidth: 4,
         minWidth: 300,
@@ -84,13 +84,13 @@ function ToastNotification({
       <span style={{ color: config.color }} className="shrink-0">
         {config.icon}
       </span>
-      <p className="flex-1 text-sm leading-snug" style={{ color: "#E8E8ED" }}>
+      <p className="flex-1 text-sm leading-snug" style={{ color: "var(--text-primary)" }}>
         {item.message}
       </p>
       <button
         onClick={() => onDismiss(item.id)}
-        className="shrink-0 rounded p-1 transition-colors hover:bg-white/5"
-        style={{ color: "#66667A" }}
+        className="shrink-0 rounded p-1 transition-colors hover:bg-[rgba(128,128,128,0.1)]"
+        style={{ color: "var(--text-muted)" }}
       >
         <X size={14} />
       </button>

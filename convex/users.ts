@@ -1,15 +1,14 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { getAuthenticatedUser, validateStringLength } from "./auth.helpers";
+import { getAuthenticatedUser, getOptionalUser, validateStringLength } from "./auth.helpers";
 
 export const getUser = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    // Only authenticated users can look up other users
-    await getAuthenticatedUser(ctx);
+    const authed = await getOptionalUser(ctx);
+    if (!authed) return null;
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
-    // Return only safe fields
     return {
       _id: user._id,
       name: user.name,
@@ -21,14 +20,13 @@ export const getUser = query({
 export const getUserByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {
-    // Only authenticated users can search by email
-    await getAuthenticatedUser(ctx);
+    const authed = await getOptionalUser(ctx);
+    if (!authed) return null;
     const user = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .withIndex("email", (q) => q.eq("email", args.email))
       .first();
     if (!user) return null;
-    // Return only safe fields
     return {
       _id: user._id,
       name: user.name,
@@ -40,8 +38,8 @@ export const getUserByEmail = query({
 export const getMe = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getAuthenticatedUser(ctx);
-    return user;
+    const user = await getOptionalUser(ctx);
+    return user ?? null;
   },
 });
 

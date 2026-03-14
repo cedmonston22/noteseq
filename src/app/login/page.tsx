@@ -1,36 +1,134 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useConvexAuth } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { Sun, Moon } from "lucide-react";
+import PyramidBackground from "@/components/ui/PyramidBackground";
+import { Tagline } from "@/components/ui/Tagline";
 
 export default function LoginPage() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const { signIn } = useAuthActions();
+  const router = useRouter();
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/journal");
+    }
+  }, [isAuthenticated, router]);
+
+  if (isLoading || isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0A0A0F]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#F2D479] border-t-transparent" />
+      </div>
+    );
+  }
+
+  const isDark = theme === "dark";
+
   return (
-    <div className="carbon-fiber flex min-h-screen items-center justify-center bg-[#0A0A0F]">
+    <div
+      className="relative flex min-h-screen items-center justify-center overflow-hidden"
+      style={{ background: isDark ? "#0A0A0F" : "#F0F0F2" }}
+    >
+      <PyramidBackground mode={theme} />
+
+      {/* Theme toggle */}
+      <button
+        onClick={() => setTheme(isDark ? "light" : "dark")}
+        className="absolute right-6 top-6 z-20 flex h-9 w-9 items-center justify-center rounded-lg transition-all"
+        style={{
+          background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+          color: isDark ? "#A0A0B0" : "#5a5a6e",
+        }}
+      >
+        {isDark ? <Sun size={16} /> : <Moon size={16} />}
+      </button>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-sm"
+        className="relative z-10 w-full max-w-lg px-6"
       >
-        {/* Logo */}
-        <div className="mb-8 flex flex-col items-center">
-          <div className="relative mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#F2D479] to-[#D4A843]">
-            <span className="text-2xl font-bold text-white">n</span>
-            <div className="absolute inset-0 rounded-xl bg-[#D4A843] opacity-40 blur-xl" />
+        {/* Logo & Tagline */}
+        <div className="mb-12 flex flex-col items-center">
+          {/* Blurred echo layer */}
+          <div className="relative">
+            <span
+              className="absolute inset-0 flex items-center justify-center text-[56px] font-black uppercase tracking-[4px]"
+              style={{
+                WebkitTextStroke: isDark
+                  ? "1.5px rgba(212,168,67,0.2)"
+                  : "1.5px rgba(184,137,46,0.12)",
+                WebkitTextFillColor: "transparent",
+                filter: isDark ? "blur(6px)" : "blur(8px)",
+              }}
+              aria-hidden="true"
+            >
+              NOTESEQ
+            </span>
+            <h1
+              className="text-[56px] font-black uppercase tracking-[4px]"
+              style={{
+                backgroundImage: isDark
+                  ? "linear-gradient(90deg, #8B6D2E, #D4A843, #F2D479, #FFF5D4, #F2D479, #D4A843, #8B6D2E, #D4A843)"
+                  : "linear-gradient(90deg, #8B6D2E, #B8892E, #D4A843, #B8892E, #8B6D2E, #B8892E)",
+                backgroundSize: "200% 100%",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                animation: "gold-sheen 5s ease-in-out infinite",
+              }}
+            >
+              NOTESEQ
+            </h1>
           </div>
-          <h1 className="gold-sheen text-2xl font-bold tracking-tight text-[#E8E8ED]">
-            noteseq
-          </h1>
-          <p className="mt-2 text-center text-sm text-[#A0A0B0]">
-            Real-time collaborative notes for developers
-          </p>
+          {/* Tagline */}
+          <Tagline className="mt-5">THINK TOGETHER</Tagline>
         </div>
 
-        {/* Card */}
-        <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#1A1A22] p-8 shadow-2xl">
+        {/* Sign-in button — no card, minimal */}
+        <div className="flex flex-col items-center gap-5">
           <button
-            onClick={() => console.log("Google OAuth sign-in")}
-            className="flex w-full items-center justify-center gap-3 rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-800 transition-all hover:bg-gray-50 active:scale-[0.98]"
+            onClick={async () => {
+              const result = await signIn("google", { redirectTo: "/journal" });
+              if (result?.redirect) {
+                window.open(result.redirect, "_self");
+              }
+            }}
+            className="flex w-full max-w-xs items-center justify-center gap-3 rounded-xl px-6 py-3.5 text-sm font-semibold transition-all active:scale-[0.97]"
+            style={{
+              background: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.05)",
+              color: isDark ? "#E8E8ED" : "#1a1a22",
+              border: isDark
+                ? "1px solid rgba(255,255,255,0.08)"
+                : "1px solid rgba(0,0,0,0.08)",
+              backdropFilter: "blur(12px)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isDark
+                ? "rgba(255,255,255,0.1)"
+                : "rgba(0,0,0,0.08)";
+              e.currentTarget.style.borderColor = isDark
+                ? "rgba(212,168,67,0.3)"
+                : "rgba(139,109,46,0.3)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.05)";
+              e.currentTarget.style.borderColor = isDark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(0,0,0,0.08)";
+            }}
           >
             <svg
               className="h-5 w-5"
@@ -54,15 +152,21 @@ export default function LoginPage() {
                 fill="#EA4335"
               />
             </svg>
-            Sign in with Google
+            Continue with Google
           </button>
 
-          <p className="mt-5 text-center text-xs text-[#66667A]">
-            Open sign-up. Anyone with a Google account can join.
+          <p
+            className="text-xs"
+            style={{ color: isDark ? "#66667A" : "#9090a0" }}
+          >
+            Open sign-up — anyone with a Google account can join
           </p>
         </div>
 
-        <p className="mt-6 text-center text-xs text-[#66667A]">
+        <p
+          className="mt-10 text-center text-[11px]"
+          style={{ color: isDark ? "#66667A" : "#9090a0" }}
+        >
           By continuing, you agree to our Terms of Service
         </p>
       </motion.div>

@@ -2,17 +2,105 @@
 @import "tailwindcss";
 
 :root {
+  /* Gold (same in both modes) */
   --gold-100: #F2D479;
   --gold-300: #D4A843;
   --gold-500: #B8892E;
   --gold-700: #8B6D2E;
+
+  /* Geo texture (light mode) */
+  --geo-top: #e4e8ed;
+  --geo-left: #d0d5dc;
+  --geo-right: #a8aeb8;
+  --geo-bottom: #b8bec8;
+  --geo-base: #c8cdd5;
+
+  /* Surfaces (light mode) */
+  --bg-primary: #F0F0F2;
+  --bg-surface: #E8E8EC;
+  --bg-elevated: #FFFFFF;
+
+  /* Text (light mode) */
+  --text-primary: #1a1a22;
+  --text-secondary: #5a5a6e;
+  --text-muted: #9090a0;
+
+  /* Borders (light mode) */
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-hover: rgba(0, 0, 0, 0.12);
+
+  /* Hollow text stroke (light mode) */
+  --hollow-stroke: #8B6D2E;
+
+  /* Legacy aliases for dark-only components */
   --dark-void: #0A0A0F;
   --dark-surface: #111116;
   --dark-elevated: #1A1A22;
   --dark-raised: #252530;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Geo texture (dark mode) */
+    --geo-top: #2a2e38;
+    --geo-left: #242830;
+    --geo-right: #111418;
+    --geo-bottom: #181c22;
+    --geo-base: #1a1d24;
+
+    /* Surfaces (dark mode) */
+    --bg-primary: #0A0A0F;
+    --bg-surface: #111116;
+    --bg-elevated: #1A1A22;
+
+    /* Text (dark mode) */
+    --text-primary: #E8E8ED;
+    --text-secondary: #A0A0B0;
+    --text-muted: #66667A;
+
+    /* Borders (dark mode) */
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.12);
+
+    /* Hollow text stroke (dark mode) */
+    --hollow-stroke: #D4A843;
+  }
+}
+
+/* Also support .dark class on html for manual toggle */
+html.dark {
+  --geo-top: #2a2e38;
+  --geo-left: #242830;
+  --geo-right: #111418;
+  --geo-bottom: #181c22;
+  --geo-base: #1a1d24;
+  --bg-primary: #0A0A0F;
+  --bg-surface: #111116;
+  --bg-elevated: #1A1A22;
   --text-primary: #E8E8ED;
   --text-secondary: #A0A0B0;
   --text-muted: #66667A;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --hollow-stroke: #D4A843;
+}
+
+/* Explicit light class for manual toggle */
+html.light {
+  --geo-top: #e4e8ed;
+  --geo-left: #d0d5dc;
+  --geo-right: #a8aeb8;
+  --geo-bottom: #b8bec8;
+  --geo-base: #c8cdd5;
+  --bg-primary: #F0F0F2;
+  --bg-surface: #E8E8EC;
+  --bg-elevated: #FFFFFF;
+  --text-primary: #1a1a22;
+  --text-secondary: #5a5a6e;
+  --text-muted: #9090a0;
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-hover: rgba(0, 0, 0, 0.12);
+  --hollow-stroke: #8B6D2E;
 }
 
 @theme inline {
@@ -45,6 +133,9 @@
 html {
   color-scheme: dark;
 }
+html.light {
+  color-scheme: light;
+}
 
 body {
   background: var(--color-bg-app);
@@ -68,11 +159,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(128, 128, 128, 0.2);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(128, 128, 128, 0.35);
 }
 
 /* ── Focus Ring ── */
@@ -90,30 +181,44 @@ a, button, input, select, textarea,
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── Carbon Fiber Texture ── */
-.carbon-fiber {
-  background-color: #12151c;
-  background-image:
-    repeating-linear-gradient(135deg,
-      rgba(200,210,230,0.22) 0px, rgba(170,180,200,0.18) 1.5px,
-      rgba(60,66,80,0.4) 3px, rgba(20,24,32,0.55) 4px,
-      rgba(60,66,80,0.4) 5px, rgba(170,180,200,0.18) 6.5px,
-      rgba(200,210,230,0.22) 8px
-    ),
-    repeating-linear-gradient(45deg,
-      rgba(170,180,200,0.16) 0px, rgba(140,150,170,0.12) 1.5px,
-      rgba(45,50,65,0.35) 3px, rgba(12,15,22,0.5) 4px,
-      rgba(45,50,65,0.35) 5px, rgba(140,150,170,0.12) 6.5px,
-      rgba(170,180,200,0.16) 8px
-    );
-  position: relative;
+/* ── Tagline ── */
+.tagline-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  white-space: nowrap;
 }
-.carbon-fiber::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 55% 30%, rgba(210,220,240,0.12) 0%, transparent 40%);
-  pointer-events: none;
+
+.tagline-line {
+  width: 60px;
+  height: 2px;
+  background: var(--gold-300);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.tagline-text {
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: var(--gold-300);
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+/* ── Hollow Stencil Text ── */
+.hollow-text {
+  font-family: 'Outfit', var(--font-sans);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1.2px var(--hollow-stroke);
+  paint-order: stroke fill;
 }
 
 /* ── Gold Sheen Animation ── */
@@ -178,7 +283,7 @@ a, button, input, select, textarea,
 
 .ProseMirror strong {
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .ProseMirror em {
@@ -420,9 +525,9 @@ a, button, input, select, textarea,
 .skeleton {
   background: linear-gradient(
     90deg,
-    var(--dark-elevated) 25%,
+    var(--bg-elevated) 25%,
     var(--dark-raised) 50%,
-    var(--dark-elevated) 75%
+    var(--bg-elevated) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;

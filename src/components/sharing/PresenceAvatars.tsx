@@ -1,30 +1,60 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Tooltip from "@/components/ui/Tooltip";
 import { COLLAB_COLORS } from "@/lib/constants";
+import type { Awareness } from "y-protocols/awareness";
 
 interface User {
   id: string;
   name: string;
+  color?: string;
 }
-
-const DUMMY_USERS: User[] = [
-  { id: "1", name: "Alice" },
-  { id: "2", name: "Bob" },
-  { id: "3", name: "Charlie" },
-];
 
 const MAX_VISIBLE = 4;
 
 interface PresenceAvatarsProps {
   users?: User[];
+  awareness?: Awareness | null;
 }
 
 export default function PresenceAvatars({
-  users = DUMMY_USERS,
+  users: propUsers = [],
+  awareness,
 }: PresenceAvatarsProps) {
+  const [awarenessUsers, setAwarenessUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    if (!awareness) {
+      setAwarenessUsers([]);
+      return;
+    }
+
+    const updateUsers = () => {
+      const states = awareness.getStates();
+      const localClientId = awareness.clientID;
+      const connectedUsers: User[] = [];
+      states.forEach((state, clientId) => {
+        if (clientId !== localClientId && state.user) {
+          connectedUsers.push({
+            id: String(clientId),
+            name: state.user.name || "Anonymous",
+            color: state.user.color,
+          });
+        }
+      });
+      setAwarenessUsers(connectedUsers);
+    };
+
+    updateUsers();
+    awareness.on("change", updateUsers);
+    return () => {
+      awareness.off("change", updateUsers);
+    };
+  }, [awareness]);
+
+  const users = awarenessUsers.length > 0 ? awarenessUsers : propUsers;
   const visible = users.slice(0, MAX_VISIBLE);
   const overflow = users.length - MAX_VISIBLE;
 
@@ -44,8 +74,8 @@ export default function PresenceAvatars({
               <div
                 className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white ring-2"
                 style={{
-                  background: COLLAB_COLORS[index % COLLAB_COLORS.length],
-                  boxShadow: "0 0 0 2px #0A0A0F",
+                  background: user.color || COLLAB_COLORS[index % COLLAB_COLORS.length],
+                  boxShadow: "0 0 0 2px var(--bg-primary)",
                 }}
               >
                 {user.name.charAt(0).toUpperCase()}
@@ -66,9 +96,9 @@ export default function PresenceAvatars({
             <div
               className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold ring-2"
               style={{
-                background: "#252530",
-                color: "#A0A0B0",
-                boxShadow: "0 0 0 2px #0A0A0F",
+                background: "var(--dark-raised)",
+                color: "var(--text-secondary)",
+                boxShadow: "0 0 0 2px var(--bg-primary)",
               }}
             >
               +{overflow}

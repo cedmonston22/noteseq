@@ -1,0 +1,5 @@
+{
+  "name": "noteseq",
+  "main": "partykit/server.ts",
+  "compatibilityDate": "2024-09-01"
+}

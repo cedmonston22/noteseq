@@ -79,6 +79,7 @@ A real-time collaborative note-taking app that combines the best of Notion and L
 | **Toggle** | `/toggle` | Collapsible content block — click header to show/hide children |
 | **Divider** | `/divider` or `---` | Horizontal rule separator |
 | **Embed** | `/embed` | Paste a YouTube, Twitter, or generic URL — render as an inline embed/preview |
+| **Event** | `/event` | Calendar event block with title, date, start/end time, description, optional linked page |
 
 #### Inline Features
 - `[[Page Name]]` — typing double brackets opens a page search dropdown. Selecting a page creates a **backlink** (clickable inline reference that navigates to that page). The linked page should be aware it was referenced (for the graph and backlinks panel).
@@ -100,6 +101,7 @@ A real-time collaborative note-taking app that combines the best of Notion and L
   - **Personal Pages** — list of user's private pages, nestable in a tree
   - **Shared with Me** — pages others have shared with the user
   - **Graph View** — link to open the knowledge graph
+  - **Calendar** — link to open the calendar view
 - Create new page button (+ icon)
 - Each page shows: title, emoji icon (if set), "shared" indicator badge
 - Drag to reorder pages (nice to have for v1, not critical)
@@ -133,6 +135,30 @@ A real-time collaborative note-taking app that combines the best of Notion and L
 - Filter controls: show only personal pages, only shared, or all
 - Zoom, pan, hover to highlight connections
 
+### 9. Import System
+- Slash command `/import` opens an import modal
+- Supported formats: Markdown (.md), Notion export (.zip), Logseq export (.md with outliner syntax), Plain text (.txt), HTML (.html)
+- Drag-and-drop file onto editor to trigger import
+- Bulk import: drop folder or zip for multiple pages
+- Auto-detect format when possible
+
+### 10. Calendar
+- Calendar page at `/calendar`, accessible from sidebar
+- Monthly, weekly, and daily views
+- Events display inline on calendar grid
+- Click date to jump to that day's journal page
+- `/event` blocks in any page auto-appear on calendar
+- Recurring events (daily, weekly, monthly, custom)
+- Google Calendar sync (two-way via Google Calendar API)
+- iCal (.ics) import/export
+
+### 11. Export System
+**Note Export:** Single page or bulk export. Formats: Markdown, PDF, HTML, Plain text, Notion-compatible markdown. Options to include/exclude backlinks, images, subpages.
+
+**Calendar Export:** All events as .ics, date range export, shareable read-only .ics feed URL.
+
+**Workspace Export:** Full backup of pages + events + graph as .zip with metadata.
+
 ---
 
 ## Design & Visual Direction
@@ -141,31 +167,33 @@ A real-time collaborative note-taking app that combines the best of Notion and L
 
 ### Color Palette
 
-Uses the brand token system defined in the Brand Identity section below.
+Uses the brand token system defined in the Brand Identity section below. All colors are defined as CSS variables with both light and dark mode values.
 
-**Backgrounds** — Dark Ramp tokens:
-- `--dark-void` (`#0A0A0F`) — Page background, deepest layer
-- `--dark-surface` (`#111116`) — Sidebar, cards, content areas
-- `--dark-elevated` (`#1A1A22`) — Modals, dropdowns, hover surfaces
-- `--dark-raised` (`#252530`) — Active surfaces, selected items
+**Backgrounds** — Dark Ramp + Light Ramp tokens:
+- `--bg-primary` — Page background (`#0A0A0F` dark / `#F0F0F2` light)
+- `--bg-surface` — Sidebar, cards (`#111116` dark / `#E8E8EC` light)
+- `--bg-elevated` — Modals, dropdowns (`#1A1A22` dark / `#FFFFFF` light)
+- `--dark-raised` (`#252530`) — Active surfaces, selected items (dark only)
 
-**Accent** — Gold Ramp tokens:
+**Accent** — Gold Ramp tokens (same in both modes):
 - `--gold-100` (`#F2D479`) — Highlights, active states, sheen peak
 - `--gold-300` (`#D4A843`) — Primary accent, buttons, links, borders
 - `--gold-500` (`#B8892E`) — Hover states, secondary accent
 - `--gold-700` (`#8B6D2E`) — Pressed states, deep accent, gradient anchors
 
-**Text** — Text Color tokens:
-- `--text-primary` (`#E8E8ED`) — Headings, body text
-- `--text-secondary` (`#A0A0B0`) — Descriptions, metadata
-- `--text-muted` (`#66667A`) — Placeholders, disabled, timestamps
+**Text** — Dual-mode Text Color tokens:
+- `--text-primary` — Headings, body (`#E8E8ED` dark / `#1a1a22` light)
+- `--text-secondary` — Descriptions, metadata (`#A0A0B0` dark / `#5a5a6e` light)
+- `--text-muted` — Placeholders, disabled (`#66667A` dark / `#9090a0` light)
 
 **Other**:
-- **Border/Dividers**: Subtle, low-contrast (`rgba(255,255,255,0.06)`)
+- **Border/Dividers**: `--border-subtle` (`rgba(255,255,255,0.06)` dark / `rgba(0,0,0,0.06)` light)
 - **Cursor colors**: Each collaborator gets a distinct bright color (pool of 8-10 vibrant colors)
 - **Callout colors**: Soft tinted backgrounds (blue-ish for info, amber for warning, green for success, red for error)
 
-The **carbon fiber CSS texture** should be used for premium surface areas: login page hero, sidebar header, empty states, and graph background.
+### Surface Texture
+
+The geometric pyramid stud texture (see Brand Identity section) should be used for premium surface areas: login/signup hero, landing page backgrounds, empty states, and the knowledge graph view background. For standard app surfaces (sidebar, editor area, modals), use the flat dark/light ramp colors.
 
 ### Typography
 
@@ -179,6 +207,10 @@ Uses **Outfit** as the primary display and body font, and **Space Mono** for cod
 | H2 | Outfit | 600 | 24px |
 | Body | Outfit | 400 | 15px, line-height 1.6 |
 | Inline code / mono | Space Mono | 400 | 13px |
+
+### Theme Support
+
+noteseq supports both light and dark mode. All colors must be defined as CSS variables with both light and dark values. The app should respect the user's system preference by default, with a manual toggle in settings. The pyramid texture, gold accents, and text treatments all have specific light and dark mode variants defined in the Brand Identity section.
 
 ### Layout
 - Full-height app layout, no scrollable chrome
@@ -201,46 +233,53 @@ Uses **Outfit** as the primary display and body font, and **Space Mono** for cod
 
 ### Logo
 - **Primary mark**: "NOTESEQ" wordmark in Outfit 900 weight, 4px letter-spacing
-- **Text treatment**: Animated metallic gold gradient sheen using these stops: `#8B6D2E → #D4A843 → #F2D479 → #FFF5D4 → #F2D479 → #D4A843 → #8B6D2E → #D4A843`
-- `background-size: 200% 100%` with a 5s ease-in-out infinite animation shifting `background-position` from `0% 50%` to `100% 50%`
-- Behind the main title, render a blurred echo layer: same text with `-webkit-text-stroke: 1.5px rgba(212,168,67,0.2)`, transparent fill, `filter: blur(6px)`, positioned absolute
+- **Dark mode text treatment**: Animated metallic gold gradient sheen using these stops: `#8B6D2E → #D4A843 → #F2D479 → #FFF5D4 → #F2D479 → #D4A843 → #8B6D2E → #D4A843`
+  - `background-size: 200% 100%` with a 5s ease-in-out infinite animation shifting `background-position` from `0% 50%` to `100% 50%`
+  - Behind the main title, render a blurred echo layer: same text with `-webkit-text-stroke: 1.5px rgba(212,168,67,0.2)`, transparent fill, `filter: blur(6px)`, positioned absolute
+- **Light mode text treatment**: Deeper gold gradient: `#8B6D2E → #B8892E → #D4A843 → #B8892E → #8B6D2E → #B8892E`
+  - Same `background-size: 200% 100%` and 5s sheen animation
+  - Echo layer uses `color: rgba(184,137,46,0.12)` with `filter: blur(8px)`
 - **Tagline**: "THINK TOGETHER" in Outfit 700, 22px, 8px letter-spacing, uppercase
-  - Gold stencil outline: `-webkit-text-stroke: 1.2px #D4A843`, transparent fill
-  - Subtle glow: `drop-shadow(0 0 16px rgba(212,168,67,0.18)) drop-shadow(0 0 36px rgba(212,168,67,0.07))`
-- **Favicon**: "nq" monogram in Outfit 700, gold on dark or dark on gold variants
+  - Dark mode: Gold stencil outline `-webkit-text-stroke: 1.2px #D4A843`, transparent fill, `drop-shadow(0 0 16px rgba(212,168,67,0.18)) drop-shadow(0 0 36px rgba(212,168,67,0.07))`
+  - Light mode: Darker gold stencil `-webkit-text-stroke: 1.2px #8B6D2E`, transparent fill, `drop-shadow(0 0 10px rgba(139,109,46,0.12))`
+- **Favicon**: "nq" monogram in Outfit 700
   - Dark variant: `background: #0A0A0F`, `color: #D4A843`
   - Gold variant: `background: linear-gradient(135deg, #C9A54E, #F2D479)`, `color: #0A0A0F`
   - Border radius: 6px at 32px, 10px at 64px
 
-### Carbon Fiber Texture
-Used as a surface material for hero sections, cards, sidebar backgrounds, or any area that needs premium texture. Pure CSS, no images:
+### Geometric Pyramid Texture
+The signature noteseq surface texture is a **3D pyramid stud grid** — a repeating diamond pattern where each square tile is divided into 4 triangular faces with solid fills simulating directional lighting from the top-left. Rendered via `<canvas>` for crisp results at any resolution.
 
-```css
-.carbon-fiber {
-  background-color: #12151c;
-  background-image:
-    repeating-linear-gradient(135deg,
-      rgba(200,210,230,0.22) 0px, rgba(170,180,200,0.18) 1.5px,
-      rgba(60,66,80,0.4) 3px, rgba(20,24,32,0.55) 4px,
-      rgba(60,66,80,0.4) 5px, rgba(170,180,200,0.18) 6.5px,
-      rgba(200,210,230,0.22) 8px
-    ),
-    repeating-linear-gradient(45deg,
-      rgba(170,180,200,0.16) 0px, rgba(140,150,170,0.12) 1.5px,
-      rgba(45,50,65,0.35) 3px, rgba(12,15,22,0.5) 4px,
-      rgba(45,50,65,0.35) 5px, rgba(140,150,170,0.12) 6.5px,
-      rgba(170,180,200,0.16) 8px
-    );
-}
-/* Optional sheen overlay */
-.carbon-fiber::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 55% 30%, rgba(210,220,240,0.12) 0%, transparent 40%);
-  pointer-events: none;
-}
+Used for: hero sections, login page background, landing page, sidebar header area, empty states, knowledge graph background.
+
+**How it works:**
+- Grid of squares (64px tile size), each divided into 4 triangles from center point to corners
+- Top-left light source: top face = lightest, left face = medium-light, bottom face = medium, right face = darkest
+- Subtle ridge highlight strokes on top edges, valley strokes on bottom edges
+
+**Light mode face colors:**
 ```
+Top face:    #e4e8ed  (lightest — catches light)
+Left face:   #d0d5dc  (medium light)
+Bottom face: #b8bec8  (medium)
+Right face:  #a8aeb8  (darkest — shadow side)
+Base/BG:     #c8cdd5
+Ridge lines: rgba(255,255,255,0.4) 0.5px
+Valley lines: rgba(0,0,0,0.06) 0.5px
+```
+
+**Dark mode face colors:**
+```
+Top face:    #2a2e38  (lightest dark face)
+Left face:   #242830  (medium)
+Bottom face: #181c22  (deep shadow)
+Right face:  #111418  (darkest face)
+Base/BG:     #1a1d24
+Ridge lines: rgba(255,255,255,0.04) 0.5px
+Valley lines: rgba(0,0,0,0.3) 0.5px
+```
+
+Implemented as a reusable React component: `components/ui/PyramidBackground.tsx` with a `mode` prop and auto-resize on window resize.
 
 ### Gold Ramp
 | Token | Hex | Usage |
@@ -253,17 +292,26 @@ Used as a surface material for hero sections, cards, sidebar backgrounds, or any
 ### Dark Ramp
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `--dark-void` | `#0A0A0F` | Page background |
+| `--dark-void` | `#0A0A0F` | Page background (deepest) |
 | `--dark-surface` | `#111116` | Sidebar, cards |
 | `--dark-elevated` | `#1A1A22` | Modals, dropdowns, hover surfaces |
 | `--dark-raised` | `#252530` | Active surfaces, selected items |
+| `--dark-geo-base` | `#1a1d24` | Pyramid texture base |
 
-### Text Colors
+### Light Ramp
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `--text-primary` | `#E8E8ED` | Headings, body text |
-| `--text-secondary` | `#A0A0B0` | Descriptions, metadata |
-| `--text-muted` | `#66667A` | Placeholders, disabled, timestamps |
+| `--light-bg` | `#F0F0F2` | Page background |
+| `--light-surface` | `#E8E8EC` | Cards, sidebar |
+| `--light-elevated` | `#FFFFFF` | Modals, dropdowns |
+| `--light-geo-base` | `#c8cdd5` | Pyramid texture base |
+
+### Text Colors
+| Token | Hex (dark) | Hex (light) | Usage |
+|-------|-----------|-------------|-------|
+| `--text-primary` | `#E8E8ED` | `#1a1a22` | Headings, body text |
+| `--text-secondary` | `#A0A0B0` | `#5a5a6e` | Descriptions, metadata |
+| `--text-muted` | `#66667A` | `#9090a0` | Placeholders, disabled, timestamps |
 
 ### Typography
 | Role | Font | Weight | Size |
@@ -344,6 +392,22 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_page", ["pageId"]),
+
+  events: defineTable({
+    title: v.string(),
+    pageId: v.optional(v.id("pages")),
+    createdBy: v.id("users"),
+    date: v.string(),
+    startTime: v.optional(v.string()),
+    endTime: v.optional(v.string()),
+    description: v.optional(v.string()),
+    isRecurring: v.boolean(),
+    recurrenceRule: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_date", ["date"])
+    .index("by_creator", ["createdBy"])
+    .index("by_page", ["pageId"]),
 });
 ```
 
@@ -404,6 +468,7 @@ TipTap Editor
 /p/[pageId]           → Freeform page editor
 /graph                → Full-page knowledge graph
 /settings             → User settings (profile, theme prefs)
+/calendar              → Calendar view (monthly/weekly/daily)
 /login                → Google OAuth login page
 ```
 
@@ -437,6 +502,8 @@ noteseq/
 │   │   │       └── page.tsx
 │   │   ├── graph/
 │   │   │   └── page.tsx    # Knowledge graph
+│   │   ├── calendar/
+│   │   │   └── page.tsx
 │   │   └── settings/
 │   │       └── page.tsx
 │   ├── components/
@@ -451,6 +518,18 @@ noteseq/
 │   │   ├── sharing/
 │   │   │   ├── ShareModal.tsx
 │   │   │   └── PresenceAvatars.tsx
+│   │   ├── calendar/
+│   │   │   ├── CalendarView.tsx
+│   │   │   ├── MonthGrid.tsx
+│   │   │   └── EventBlock.tsx
+│   │   ├── import/
+│   │   │   ├── ImportModal.tsx
+│   │   │   └── parsers/
+│   │   │       ├── markdown.ts
+│   │   │       └── logseq.ts
+│   │   ├── export/
+│   │   │   ├── ExportModal.tsx
+│   │   │   └── exportMarkdown.ts
 │   │   └── ui/
 │   │       ├── Toast.tsx
 │   │       ├── Modal.tsx
@@ -516,6 +595,27 @@ Build in this sequence — each phase is deployable and testable:
 29. Mobile responsiveness (at minimum: readable, ideally: usable)
 30. Error handling, edge cases, empty states
 31. Performance: lazy load graph, virtualize long page lists
+
+### Phase 7: Import System
+32. Import modal UI with format selector
+33. Markdown parser to noteseq blocks
+34. Logseq parser (bullets to nested blocks, [[refs]] to backlinks)
+35. Notion zip import
+36. Drag-and-drop import trigger
+
+### Phase 8: Calendar
+37. Calendar page with monthly view
+38. Weekly and daily views
+39. /event block type
+40. Events rendering on calendar grid
+41. Google Calendar OAuth + two-way sync
+42. iCal (.ics) import/export
+
+### Phase 9: Export
+43. Single page export (markdown, PDF, HTML, plain text)
+44. Bulk export to .zip
+45. Calendar export (.ics)
+46. Full workspace backup
 
 ---
 

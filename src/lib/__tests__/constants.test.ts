@@ -86,7 +86,7 @@ describe("SLASH_COMMANDS", () => {
     }
   });
 
-  it("has 12 commands total", () => {
-    expect(SLASH_COMMANDS).toHaveLength(12);
+  it("has 13 commands total", () => {
+    expect(SLASH_COMMANDS).toHaveLength(13);
   });
 });

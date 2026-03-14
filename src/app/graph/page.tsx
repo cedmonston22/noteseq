@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Filter } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useConvexAuth, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import AppShell from "@/components/layout/AppShell";
 import { cn } from "@/lib/utils";
 
@@ -18,50 +20,39 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ),
 });
 
-const NODES = [
-  { id: "1", name: "Project Ideas", group: "personal" },
-  { id: "2", name: "Architecture Notes", group: "personal" },
-  { id: "3", name: "API Design", group: "personal" },
-  { id: "4", name: "Meeting Notes", group: "shared" },
-  { id: "5", name: "Reading List", group: "personal" },
-  { id: "6", name: "Team Standup", group: "shared" },
-  { id: "7", name: "Sprint Planning", group: "shared" },
-  { id: "8", name: "Bug Tracker", group: "personal" },
-  { id: "9", name: "Design System", group: "personal" },
-  { id: "10", name: "Deployment Guide", group: "personal" },
-  { id: "11", name: "Onboarding", group: "shared" },
-  { id: "12", name: "Performance Notes", group: "personal" },
-  { id: "13", name: "Database Schema", group: "personal" },
-  { id: "14", name: "Security Audit", group: "shared" },
-  { id: "15", name: "Q1 Goals", group: "shared" },
-  { id: "16", name: "Tech Debt", group: "personal" },
-  { id: "17", name: "Release Notes", group: "shared" },
-  { id: "18", name: "Code Review", group: "personal" },
-];
-
-const LINKS = [
-  { source: "1", target: "2" }, { source: "1", target: "3" },
-  { source: "2", target: "3" }, { source: "2", target: "13" },
-  { source: "3", target: "13" }, { source: "4", target: "6" },
-  { source: "4", target: "7" }, { source: "5", target: "1" },
-  { source: "6", target: "7" }, { source: "6", target: "15" },
-  { source: "8", target: "16" }, { source: "9", target: "2" },
-  { source: "10", target: "11" }, { source: "10", target: "2" },
-  { source: "12", target: "16" }, { source: "12", target: "8" },
-  { source: "13", target: "10" }, { source: "14", target: "3" },
-  { source: "14", target: "13" }, { source: "15", target: "7" },
-  { source: "16", target: "18" }, { source: "17", target: "10" },
-  { source: "17", target: "15" }, { source: "18", target: "8" },
-  { source: "9", target: "3" }, { source: "11", target: "4" },
-  { source: "1", target: "15" },
-];
-
 type FilterType = "all" | "personal" | "shared";
 
 export default function GraphPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>("all");
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+
+  const { isAuthenticated } = useConvexAuth();
+
+  // Load real data from Convex
+  const graphData = useQuery(
+    api.pages.getAllPagesForGraph,
+    isAuthenticated ? {} : "skip"
+  );
+
+  // Build nodes and links from real data, falling back to demo
+  const { nodes: NODES, links: LINKS } = useMemo(() => {
+    if (graphData && graphData.pages.length > 0) {
+      const nodes = graphData.pages
+        .filter(Boolean)
+        .map((p) => ({
+          id: p!._id as string,
+          name: p!.title || "Untitled",
+          group: p!.isShared ? "shared" : "personal",
+        }));
+      const links = graphData.links.map((l) => ({
+        source: l.source as string,
+        target: l.target as string,
+      }));
+      return { nodes, links };
+    }
+    return { nodes: [], links: [] };
+  }, [graphData]);
 
   const filteredData = useMemo(() => {
     const filteredNodes =
@@ -73,7 +64,7 @@ export default function GraphPage() {
       (l) => nodeIds.has(l.source as string) && nodeIds.has(l.target as string)
     );
     return { nodes: filteredNodes, links: filteredLinks };
-  }, [filter]);
+  }, [filter, NODES, LINKS]);
 
   const connectedNodes = useMemo(() => {
     if (!hoveredNode) return new Set<string>();
@@ -86,7 +77,7 @@ export default function GraphPage() {
       if (t === hoveredNode) connected.add(s);
     });
     return connected;
-  }, [hoveredNode]);
+  }, [hoveredNode, LINKS]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nodeCanvasObject = useCallback(
@@ -194,6 +185,15 @@ export default function GraphPage() {
 
         {/* Graph */}
         <div className="flex-1">
+          {NODES.length === 0 ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3">
+              <p className="text-sm text-[#66667A]">
+                {isAuthenticated
+                  ? "Create pages and link them with [[backlinks]] to build your graph."
+                  : "Sign in to see your knowledge graph."}
+              </p>
+            </div>
+          ) : (
           <ForceGraph2D
             graphData={filteredData}
             nodeCanvasObject={nodeCanvasObject}
@@ -221,6 +221,7 @@ export default function GraphPage() {
             d3VelocityDecay={0.3}
             warmupTicks={50}
           />
+          )}
         </div>
       </div>
     </AppShell>

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { User, Palette, Info, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
+import { useTheme } from "@/lib/useTheme";
 
 function SettingsCard({
   icon: Icon,
@@ -16,12 +17,12 @@ function SettingsCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#1A1A22] p-6">
+    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[rgba(212,168,67,0.12)]">
           <Icon size={18} className="text-[#D4A843]" />
         </div>
-        <h2 className="text-base font-semibold text-[#E8E8ED]">{title}</h2>
+        <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>
       </div>
       {children}
     </div>
@@ -29,6 +30,8 @@ function SettingsCard({
 }
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useTheme();
+
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
@@ -36,11 +39,11 @@ export default function SettingsPage() {
           <div className="mb-8 flex items-center gap-4">
             <Link
               href="/journal"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.06)] text-[#A0A0B0] transition-all hover:border-[rgba(255,255,255,0.1)] hover:text-[#E8E8ED]"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-subtle)] text-[var(--text-secondary)] transition-all hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]"
             >
               <ArrowLeft size={16} />
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight text-[#E8E8ED]">
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
               Settings
             </h1>
           </div>
@@ -56,8 +59,8 @@ export default function SettingsPage() {
                   U
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-[#E8E8ED]">User</p>
-                  <p className="text-sm text-[#66667A]">user@example.com</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">User</p>
+                  <p className="text-sm text-[var(--text-muted)]">user@example.com</p>
                 </div>
               </div>
             </SettingsCard>
@@ -65,29 +68,36 @@ export default function SettingsPage() {
             <SettingsCard icon={Palette} title="Appearance">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-[#E8E8ED]">Theme</p>
-                  <p className="text-xs text-[#66667A]">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Theme</p>
+                  <p className="text-xs text-[var(--text-muted)]">
                     Choose your preferred theme
                   </p>
                 </div>
-                <div className="flex items-center gap-1 rounded-lg border border-[rgba(255,255,255,0.06)] p-1">
-                  <button className="rounded-md bg-[#D4A843] px-3 py-1.5 text-xs font-medium text-white">
-                    Dark
-                  </button>
-                  <button className="rounded-md px-3 py-1.5 text-xs font-medium text-[#66667A]">
-                    Light
-                  </button>
+                <div className="flex items-center gap-1 rounded-lg border border-[var(--border-subtle)] p-1">
+                  {(["light", "dark", "system"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTheme(t)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        theme === t
+                          ? "bg-[#D4A843] text-white"
+                          : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                      }`}
+                    >
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
                 </div>
               </div>
             </SettingsCard>
 
             <SettingsCard icon={Info} title="About">
-              <div className="space-y-2 text-sm text-[#A0A0B0]">
+              <div className="space-y-2 text-sm text-[var(--text-secondary)]">
                 <p>
-                  <span className="text-[#66667A]">Version:</span> 0.1.0
+                  <span className="text-[var(--text-muted)]">Version:</span> 0.1.0
                 </p>
                 <p>
-                  <span className="text-[#66667A]">Built with:</span> Next.js,
+                  <span className="text-[var(--text-muted)]">Built with:</span> Next.js,
                   Convex, TipTap, Yjs
                 </p>
               </div>
