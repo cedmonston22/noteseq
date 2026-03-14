@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -266,6 +267,60 @@ export default function NoteEditor({
     [editor]
   );
 
+  // Floating "+" button on empty lines (like Notion)
+  const [addButtonPos, setAddButtonPos] = useState<{ top: number } | null>(null);
+
+  useEffect(() => {
+    if (!editor || !editorContainerRef.current) return;
+
+    const updateAddButton = () => {
+      if (!editor || !editorContainerRef.current) return;
+
+      const { $from } = editor.state.selection;
+      const node = $from.parent;
+      const isEmptyParagraph = node.type.name === "paragraph" && node.content.size === 0;
+
+      if (isEmptyParagraph && editor.isFocused) {
+        try {
+          const pos = $from.before();
+          const coords = editor.view.coordsAtPos(pos);
+          const containerRect = editorContainerRef.current.getBoundingClientRect();
+          setAddButtonPos({ top: coords.top - containerRect.top });
+        } catch {
+          setAddButtonPos(null);
+        }
+      } else {
+        setAddButtonPos(null);
+      }
+    };
+
+    editor.on("selectionUpdate", updateAddButton);
+    editor.on("update", updateAddButton);
+    editor.on("focus", updateAddButton);
+    editor.on("blur", () => setAddButtonPos(null));
+
+    return () => {
+      editor.off("selectionUpdate", updateAddButton);
+      editor.off("update", updateAddButton);
+      editor.off("focus", updateAddButton);
+      editor.off("blur", () => setAddButtonPos(null));
+    };
+  }, [editor]);
+
+  const handleAddBlockClick = useCallback(() => {
+    if (!editor || !editorContainerRef.current) return;
+    const { from } = editor.state.selection;
+    const coords = editor.view.coordsAtPos(from);
+    const containerRect = editorContainerRef.current.getBoundingClientRect();
+    setSlashMenuPos({
+      top: coords.bottom - containerRect.top + 4,
+      left: coords.left - containerRect.left,
+    });
+    slashRangeRef.current = { from, to: from };
+    setSlashFilter("");
+    setSlashMenuOpen(true);
+  }, [editor]);
+
   if (!editor) return null;
 
   return (
@@ -279,6 +334,22 @@ export default function NoteEditor({
         className="hidden"
         aria-hidden="true"
       />
+      {/* Floating + button on empty lines */}
+      {addButtonPos && !slashMenuOpen && (
+        <button
+          onClick={handleAddBlockClick}
+          className="absolute z-10 flex h-6 w-6 items-center justify-center rounded-md transition-all hover:bg-[rgba(128,128,128,0.15)]"
+          style={{
+            top: addButtonPos.top,
+            left: 12,
+            color: "var(--text-muted)",
+          }}
+          title="Add a block"
+        >
+          <Plus size={16} />
+        </button>
+      )}
+
       <EditorContent
         editor={editor}
         className="mx-auto max-w-3xl px-8 py-8"

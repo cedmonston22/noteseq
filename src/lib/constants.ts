@@ -53,95 +53,21 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  {
-    id: "heading1",
-    label: "Heading 1",
-    description: "Large section heading",
-    icon: "Heading1",
-    category: "Basic Blocks",
-  },
-  {
-    id: "heading2",
-    label: "Heading 2",
-    description: "Medium section heading",
-    icon: "Heading2",
-    category: "Basic Blocks",
-  },
-  {
-    id: "heading3",
-    label: "Heading 3",
-    description: "Small section heading",
-    icon: "Heading3",
-    category: "Basic Blocks",
-  },
-  {
-    id: "paragraph",
-    label: "Text",
-    description: "Plain text block",
-    icon: "Type",
-    category: "Basic Blocks",
-  },
-  {
-    id: "bullet-list",
-    label: "Bullet List",
-    description: "Unordered list",
-    icon: "List",
-    category: "Basic Blocks",
-  },
-  {
-    id: "numbered-list",
-    label: "Numbered List",
-    description: "Ordered list",
-    icon: "ListOrdered",
-    category: "Basic Blocks",
-  },
-  {
-    id: "todo",
-    label: "To-do",
-    description: "Task checkbox",
-    icon: "CheckSquare",
-    category: "Basic Blocks",
-  },
-  {
-    id: "divider",
-    label: "Divider",
-    description: "Horizontal rule",
-    icon: "Minus",
-    category: "Basic Blocks",
-  },
-  {
-    id: "quote",
-    label: "Quote",
-    description: "Blockquote",
-    icon: "Quote",
-    category: "Basic Blocks",
-  },
-  {
-    id: "code",
-    label: "Code Block",
-    description: "Syntax-highlighted code",
-    icon: "Code",
-    category: "Advanced",
-  },
-  {
-    id: "callout",
-    label: "Callout",
-    description: "Highlighted info box",
-    icon: "AlertCircle",
-    category: "Advanced",
-  },
-  {
-    id: "image",
-    label: "Image",
-    description: "Upload or embed image",
-    icon: "Image",
-    category: "Media",
-  },
-  {
-    id: "import",
-    label: "Import",
-    description: "Import from file",
-    icon: "Upload",
-    category: "Advanced",
-  },
+  // Basic Blocks
+  { id: "paragraph", label: "Text", description: "Plain text block", icon: "Type", category: "Basic Blocks" },
+  { id: "heading1", label: "Heading 1", description: "Large section heading", icon: "Heading1", category: "Basic Blocks" },
+  { id: "heading2", label: "Heading 2", description: "Medium section heading", icon: "Heading2", category: "Basic Blocks" },
+  { id: "heading3", label: "Heading 3", description: "Small section heading", icon: "Heading3", category: "Basic Blocks" },
+  { id: "bullet-list", label: "Bullet List", description: "Simple bulleted list", icon: "List", category: "Lists" },
+  { id: "numbered-list", label: "Numbered List", description: "Numbered ordered list", icon: "ListOrdered", category: "Lists" },
+  { id: "todo", label: "To-do List", description: "Track tasks with checkboxes", icon: "CheckSquare", category: "Lists" },
+  { id: "divider", label: "Divider", description: "Visual separator", icon: "Minus", category: "Basic Blocks" },
+  // Rich Blocks
+  { id: "quote", label: "Quote", description: "Capture a quotation", icon: "Quote", category: "Rich Blocks" },
+  { id: "callout", label: "Callout", description: "Highlighted info box", icon: "AlertCircle", category: "Rich Blocks" },
+  { id: "code", label: "Code Block", description: "Syntax-highlighted code", icon: "Code", category: "Rich Blocks" },
+  // Media
+  { id: "image", label: "Image", description: "Upload or embed an image", icon: "Image", category: "Media" },
+  // Actions
+  { id: "import", label: "Import", description: "Import from file", icon: "Upload", category: "Actions" },
 ];
