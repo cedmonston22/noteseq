@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import PresenceAvatars from "@/components/sharing/PresenceAvatars";
 import ShareModal from "@/components/sharing/ShareModal";
 import ExportModal from "@/components/export/ExportModal";
+import NotificationBell from "@/components/ui/NotificationBell";
 
 interface TopBarProps {
   title?: string;
@@ -77,6 +78,8 @@ export default function TopBar({
           <Share2 size={13} />
           <span className="hidden md:inline">Share</span>
         </button>
+
+        <NotificationBell />
 
         {/* More options dropdown */}
         <div className="relative" ref={menuRef}>

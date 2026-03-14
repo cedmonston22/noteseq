@@ -41,6 +41,8 @@ export default defineSchema({
     content: v.optional(v.string()), // JSON-serialized TipTap content
     yjsState: v.optional(v.bytes()),
     sortOrder: v.optional(v.number()),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -80,6 +82,18 @@ export default defineSchema({
     lastSeen: v.number(),
   })
     .index("by_page_session", ["pageId", "sessionId"]),
+
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(), // "invite", "invite_accepted", "page_edited"
+    message: v.string(),
+    pageId: v.optional(v.id("pages")),
+    fromUserId: v.optional(v.id("users")),
+    read: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "read"]),
 
   files: defineTable({
     storageId: v.id("_storage"),

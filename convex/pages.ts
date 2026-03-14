@@ -38,7 +38,12 @@ export const getUserPages = query({
     return await ctx.db
       .query("pages")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
-      .filter((q) => q.eq(q.field("isJournal"), false))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isJournal"), false),
+          q.neq(q.field("isDeleted"), true)
+        )
+      )
       .collect();
   },
 });
@@ -95,6 +100,7 @@ export const createPage = mutation({
     isJournal: v.boolean(),
     journalDate: v.optional(v.string()),
     folderId: v.optional(v.id("folders")),
+    content: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
@@ -109,6 +115,7 @@ export const createPage = mutation({
       isJournal: args.isJournal,
       journalDate: args.journalDate,
       isShared: false,
+      content: args.content,
       createdAt: now,
       updatedAt: now,
     });
@@ -183,6 +190,52 @@ export const deletePage = mutation({
     if (!page) throw new Error("Page not found");
     if (page.ownerId !== user._id) throw new Error("Not authorized — only the owner can delete");
 
+    // Soft delete — move to trash
+    await ctx.db.patch(args.pageId, {
+      isDeleted: true,
+      deletedAt: Date.now(),
+    });
+  },
+});
+
+export const getTrashPages = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
+    const pages = await ctx.db
+      .query("pages")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .filter((q) => q.eq(q.field("isDeleted"), true))
+      .collect();
+    // Sort by deletedAt descending
+    return pages.sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+  },
+});
+
+export const restorePage = mutation({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+    if (page.ownerId !== user._id) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.pageId, {
+      isDeleted: false,
+      deletedAt: undefined,
+    });
+  },
+});
+
+export const permanentlyDeletePage = mutation({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+    if (page.ownerId !== user._id) throw new Error("Not authorized — only the owner can delete");
+
     // Delete collaborators
     const collabs = await ctx.db
       .query("pageCollaborators")
@@ -204,6 +257,42 @@ export const deletePage = mutation({
     for (const l of targetLinks) await ctx.db.delete(l._id);
 
     await ctx.db.delete(args.pageId);
+  },
+});
+
+export const emptyTrash = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getAuthenticatedUser(ctx);
+    const trashedPages = await ctx.db
+      .query("pages")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .filter((q) => q.eq(q.field("isDeleted"), true))
+      .collect();
+
+    for (const page of trashedPages) {
+      // Delete collaborators
+      const collabs = await ctx.db
+        .query("pageCollaborators")
+        .withIndex("by_page", (q) => q.eq("pageId", page._id))
+        .collect();
+      for (const c of collabs) await ctx.db.delete(c._id);
+
+      // Delete backlinks
+      const sourceLinks = await ctx.db
+        .query("backlinks")
+        .withIndex("by_source", (q) => q.eq("sourcePageId", page._id))
+        .collect();
+      for (const l of sourceLinks) await ctx.db.delete(l._id);
+
+      const targetLinks = await ctx.db
+        .query("backlinks")
+        .withIndex("by_target", (q) => q.eq("targetPageId", page._id))
+        .collect();
+      for (const l of targetLinks) await ctx.db.delete(l._id);
+
+      await ctx.db.delete(page._id);
+    }
   },
 });
 
@@ -288,6 +377,17 @@ export const sharePage = mutation({
       invitedBy: user._id,
       status: "pending",
       addedAt: Date.now(),
+    });
+
+    // Notify the invited user
+    await ctx.db.insert("notifications", {
+      userId: targetUser._id,
+      type: "invite",
+      message: `${user.name || "Someone"} invited you to collaborate on "${page.title}"`,
+      pageId: args.pageId,
+      fromUserId: user._id,
+      read: false,
+      createdAt: Date.now(),
     });
 
     if (!page.isShared) {
@@ -424,6 +524,17 @@ export const acceptInvite = mutation({
       });
     }
 
+    // Notify the page owner
+    await ctx.db.insert("notifications", {
+      userId: page.ownerId,
+      type: "invite_accepted",
+      message: `${user.name || "Someone"} accepted your invite to "${page.title}"`,
+      pageId: args.pageId,
+      fromUserId: user._id,
+      read: false,
+      createdAt: Date.now(),
+    });
+
     if (!page.isShared) {
       await ctx.db.patch(args.pageId, { isShared: true });
     }
@@ -434,6 +545,7 @@ export const declineInvite = mutation({
   args: { pageId: v.id("pages") },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
 
     const existing = await ctx.db
       .query("pageCollaborators")
@@ -443,6 +555,19 @@ export const declineInvite = mutation({
 
     if (existing) {
       await ctx.db.delete(existing._id);
+
+      // Notify the page owner
+      if (page) {
+        await ctx.db.insert("notifications", {
+          userId: page.ownerId,
+          type: "invite_declined",
+          message: `${user.name || "Someone"} declined your invite to "${page.title}"`,
+          pageId: args.pageId,
+          fromUserId: user._id,
+          read: false,
+          createdAt: Date.now(),
+        });
+      }
 
       // Check if any collaborators remain
       const remaining = await ctx.db

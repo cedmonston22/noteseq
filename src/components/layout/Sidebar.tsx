@@ -20,6 +20,7 @@ import {
   FileText,
   Users,
   Trash2,
+  MoreVertical,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -154,6 +155,8 @@ function PageListItem({
   page,
   collapsed,
   onDelete,
+  onRename,
+  onShare,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -167,6 +170,8 @@ function PageListItem({
   page: PageItem;
   collapsed: boolean;
   onDelete?: (id: string) => void;
+  onRename?: (id: string) => void;
+  onShare?: (id: string) => void;
   onDragStart?: (e: React.DragEvent, pageId: string) => void;
   onDragOver?: (e: React.DragEvent, pageId: string) => void;
   onDragLeave?: (e: React.DragEvent) => void;
@@ -177,8 +182,24 @@ function PageListItem({
   folders?: FolderItem[];
   onMovePage?: (pageId: string, folderId: string | undefined) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const dotsRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        dotsRef.current && !dotsRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mouseup", handler);
+    return () => document.removeEventListener("mouseup", handler);
+  }, [menuOpen]);
 
   return (
     <div className="relative">
@@ -194,12 +215,6 @@ function PageListItem({
         onDragLeave={(e) => onDragLeave?.(e)}
         onDrop={(e) => onDrop?.(e, page.id)}
         onDragEnd={(e) => onDragEnd?.(e)}
-        onContextMenu={(e) => {
-          if (folders && folders.length > 0 && onMovePage) {
-            e.preventDefault();
-            setShowMoveMenu(!showMoveMenu);
-          }
-        }}
         className="group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-all hover:bg-[rgba(128,128,128,0.08)]"
       >
         <span className="shrink-0 text-sm">{page.icon || "\u{1F4C4}"}</span>
@@ -210,74 +225,142 @@ function PageListItem({
             </span>
             {page.isShared && page.isOwner && (
               <Crown
-                size={12}
-                className="ml-auto shrink-0 text-[#D4A843]"
+                size={11}
+                className="shrink-0 text-[#D4A843]"
               />
             )}
-            {onDelete && (
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setConfirmingDelete(true);
-                }}
-                className="ml-auto shrink-0 rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-                aria-label={`Delete ${page.title}`}
-              >
-                <X size={14} />
-              </button>
-            )}
-            {confirmingDelete && (
-              <DeleteConfirmPopover
-                onConfirm={() => {
-                  setConfirmingDelete(false);
-                  onDelete?.(page.id);
-                }}
-                onCancel={() => setConfirmingDelete(false)}
-              />
-            )}
+            {/* Three-dot menu */}
+            <button
+              ref={dotsRef}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMenuOpen(!menuOpen);
+              }}
+              className="ml-auto shrink-0 rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:text-[var(--text-primary)] group-hover:opacity-100"
+              aria-label={`Options for ${page.title}`}
+            >
+              <MoreVertical size={14} />
+            </button>
           </>
         )}
       </Link>
-      {dropIndicator === "below" && (
-        <div className="absolute bottom-0 left-2 right-2 z-10 h-[2px] rounded-full bg-[#D4A843]" />
-      )}
-      {showMoveMenu && !collapsed && folders && onMovePage && (
-        <div className="absolute left-4 top-full z-50 mt-1 w-48 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] py-1 shadow-lg">
-          {page.folderId && (
+
+      {/* Context menu */}
+      {menuOpen && !collapsed && (
+        <div
+          ref={menuRef}
+          className="absolute right-2 top-full z-50 mt-0.5 w-48 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] py-1 shadow-xl"
+        >
+          {onRename && (
             <button
-              onClick={() => {
-                onMovePage(page.id, undefined);
-                setShowMoveMenu(false);
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onRename(page.id);
               }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[rgba(128,128,128,0.08)]"
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[rgba(128,128,128,0.08)] hover:text-[var(--text-primary)]"
             >
-              <X size={12} />
-              <span>Remove from folder</span>
+              <FileText size={13} className="shrink-0" />
+              Rename
             </button>
           )}
-          {folders
-            .filter((f) => f.id !== page.folderId)
-            .map((folder) => (
-              <button
-                key={folder.id}
-                onClick={() => {
-                  onMovePage(page.id, folder.id);
-                  setShowMoveMenu(false);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[rgba(128,128,128,0.08)]"
-              >
-                <Folder size={12} />
-                <span className="truncate">{folder.name}</span>
-              </button>
-            ))}
-          <button
-            onClick={() => setShowMoveMenu(false)}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[rgba(128,128,128,0.08)]"
-          >
-            Cancel
-          </button>
+          {onShare && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(false);
+                onShare(page.id);
+              }}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[rgba(128,128,128,0.08)] hover:text-[var(--text-primary)]"
+            >
+              <Users size={13} className="shrink-0" />
+              {page.isShared ? "Manage collaborators" : "Share"}
+            </button>
+          )}
+          {folders && folders.length > 0 && onMovePage && (
+            <>
+              <div className="my-1 border-t border-[var(--border-subtle)]" />
+              <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Move to
+              </p>
+              {page.folderId && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onMovePage(page.id, undefined);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[rgba(128,128,128,0.08)] hover:text-[var(--text-primary)]"
+                >
+                  <X size={12} className="shrink-0" />
+                  Remove from folder
+                </button>
+              )}
+              {folders.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onMovePage(page.id, f.id);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[rgba(128,128,128,0.08)] hover:text-[var(--text-primary)]"
+                >
+                  <Folder size={12} className="shrink-0" />
+                  {f.name}
+                </button>
+              ))}
+            </>
+          )}
+          {onDelete && (
+            <>
+              <div className="my-1 border-t border-[var(--border-subtle)]" />
+              {confirmingDelete ? (
+                <div className="px-3 py-2">
+                  <p className="mb-2 text-xs font-medium text-[var(--text-primary)]">Delete this page?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmingDelete(false);
+                        setMenuOpen(false);
+                        onDelete(page.id);
+                      }}
+                      className="rounded-md bg-red-500/90 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmingDelete(false);
+                      }}
+                      className="rounded-md border border-[var(--border-subtle)] px-3 py-1 text-xs text-[var(--text-secondary)] hover:bg-[rgba(128,128,128,0.08)]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmingDelete(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-[rgba(239,68,68,0.08)]"
+                >
+                  <Trash2 size={13} className="shrink-0" />
+                  Delete
+                </button>
+              )}
+            </>
+          )}
         </div>
+      )}
+
+      {dropIndicator === "below" && (
+        <div className="absolute bottom-0 left-2 right-2 z-10 h-[2px] rounded-full bg-[#D4A843]" />
       )}
     </div>
   );
@@ -560,11 +643,16 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const acceptInviteMutation = useMutation(api.pages.acceptInvite);
   const declineInviteMutation = useMutation(api.pages.declineInvite);
   const pendingInvites = useQuery(api.pages.getPendingInvites, isAuthenticated ? {} : "skip");
+  const trashPages = useQuery(api.pages.getTrashPages, isAuthenticated ? {} : "skip");
+  const restorePageMutation = useMutation(api.pages.restorePage);
+  const permanentlyDeletePageMutation = useMutation(api.pages.permanentlyDeletePage);
+  const emptyTrashMutation = useMutation(api.pages.emptyTrash);
 
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ pageId: string; position: "above" | "below" } | null>(null);
   const [folderNameInput, setFolderNameInput] = useState<string | null>(null);
   const [collabFolderNameInput, setCollabFolderNameInput] = useState<string | null>(null);
+  const [trashExpanded, setTrashExpanded] = useState(false);
 
   // Map Convex folders to FolderItem format
   const folders: FolderItem[] = userFolders
@@ -693,17 +781,9 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const mySharedPages: PageItem[] = allOwnedPages.filter((p) => p.isShared);
   const shared: PageItem[] = [...mySharedPages, ...sharedWithMe];
 
-  const handleNewPage = async () => {
-    try {
-      const pageId = await createPage({
-        title: "Untitled",
-        isJournal: false,
-      });
-      router.push(`/p/${pageId}`);
-      onMobileClose?.();
-    } catch {
-      // User not authenticated or other error — ignore gracefully
-    }
+  const handleNewPage = () => {
+    window.dispatchEvent(new CustomEvent("noteseq:open-template-picker"));
+    onMobileClose?.();
   };
 
   const handleDeletePage = async (id: string) => {
@@ -712,6 +792,16 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     } catch {
       // User not authenticated or other error — ignore gracefully
     }
+  };
+
+  const handleRenamePage = (id: string) => {
+    router.push(`/p/${id}`);
+    onMobileClose?.();
+    // Focus will go to the title input on the page
+  };
+
+  const handleSharePage = (id: string) => {
+    window.dispatchEvent(new CustomEvent("noteseq:open-share", { detail: { pageId: id } }));
   };
 
   const handleNewFolder = () => {
@@ -928,6 +1018,8 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 page={page}
                 collapsed={collapsed}
                 onDelete={userPages ? handleDeletePage : undefined}
+                onRename={handleRenamePage}
+                onShare={handleSharePage}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -1016,6 +1108,9 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 key={page.id}
                 page={page}
                 collapsed={collapsed}
+                onDelete={page.isOwner ? handleDeletePage : undefined}
+                onRename={handleRenamePage}
+                onShare={page.isOwner ? handleSharePage : undefined}
                 onNavigate={handleMobileNavigate}
               />
             ))
@@ -1025,6 +1120,73 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             )
           )}
         </div>
+
+        {/* Trash */}
+        {!collapsed && (
+          <div className="mt-4 border-t border-[var(--border-subtle)] pt-2">
+            <button
+              onClick={() => setTrashExpanded(!trashExpanded)}
+              className="group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-[rgba(128,128,128,0.08)]"
+            >
+              <Trash2 size={16} className="shrink-0 text-[var(--text-muted)]" />
+              <span className="text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]">
+                Trash
+              </span>
+              {trashPages && trashPages.length > 0 && (
+                <span className="ml-auto text-[10px] text-[var(--text-muted)]">
+                  {trashPages.length}
+                </span>
+              )}
+              {trashExpanded ? (
+                <ChevronDown size={14} className="shrink-0 text-[var(--text-muted)]" />
+              ) : (
+                <ChevronRight size={14} className="shrink-0 text-[var(--text-muted)]" />
+              )}
+            </button>
+            {trashExpanded && (
+              <div className="space-y-0.5 pl-2">
+                {trashPages && trashPages.length > 0 ? (
+                  <>
+                    {trashPages.map((page) => (
+                      <div
+                        key={page._id}
+                        className="group flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm opacity-60 transition-all hover:opacity-100"
+                      >
+                        <span className="shrink-0 text-sm">{page.icon || "\u{1F4C4}"}</span>
+                        <span className="min-w-0 flex-1 truncate text-[var(--text-muted)]">
+                          {page.title}
+                        </span>
+                        <button
+                          onClick={() => restorePageMutation({ pageId: page._id }).catch(() => {})}
+                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-[#10B981] opacity-0 transition-all hover:bg-[rgba(16,185,129,0.1)] group-hover:opacity-100"
+                          title="Restore"
+                        >
+                          Restore
+                        </button>
+                        <button
+                          onClick={() => permanentlyDeletePageMutation({ pageId: page._id }).catch(() => {})}
+                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-[#EF4444] opacity-0 transition-all hover:bg-[rgba(239,68,68,0.1)] group-hover:opacity-100"
+                          title="Delete forever"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => emptyTrashMutation().catch(() => {})}
+                      className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-[#EF4444] transition-all hover:bg-[rgba(239,68,68,0.08)]"
+                    >
+                      <Trash2 size={12} />
+                      Empty trash
+                    </button>
+                  </>
+                ) : (
+                  <p className="px-3 py-2 text-xs text-[var(--text-muted)]">Trash is empty</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Bottom */}

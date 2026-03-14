@@ -13,6 +13,7 @@ import type * as backlinks from "../backlinks.js";
 import type * as files from "../files.js";
 import type * as folders from "../folders.js";
 import type * as http from "../http.js";
+import type * as notifications from "../notifications.js";
 import type * as pages from "../pages.js";
 import type * as presence from "../presence.js";
 import type * as users from "../users.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   files: typeof files;
   folders: typeof folders;
   http: typeof http;
+  notifications: typeof notifications;
   pages: typeof pages;
   presence: typeof presence;
   users: typeof users;
