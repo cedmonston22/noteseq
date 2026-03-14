@@ -789,6 +789,10 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const handleDeletePage = async (id: string) => {
     try {
       await deletePageMutation({ pageId: id as never });
+      // Navigate away if we're on the deleted page
+      if (pathname === `/p/${id}`) {
+        router.push("/journal");
+      }
     } catch {
       // User not authenticated or other error — ignore gracefully
     }

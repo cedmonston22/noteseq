@@ -9,9 +9,10 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  maxWidth?: string;
 }
 
-export default function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, maxWidth }: ModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
@@ -46,7 +47,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="relative z-10 w-full max-w-lg rounded-xl shadow-2xl"
+            className={`relative z-10 w-full rounded-xl shadow-2xl ${maxWidth || "max-w-lg"}`}
             style={{
               background: "var(--bg-elevated)",
               border: "1px solid var(--border-subtle)",

@@ -16,6 +16,12 @@ import {
   ListOrdered,
   Type,
   Upload,
+  Highlighter,
+  ListTree,
+  Calendar,
+  Clock,
+  Smile,
+  BarChart3,
 } from "lucide-react";
 import { SLASH_COMMANDS } from "@/lib/constants";
 
@@ -33,6 +39,12 @@ const ICON_MAP: Record<string, React.ElementType> = {
   ListOrdered,
   Type,
   Upload,
+  Highlighter,
+  ListTree,
+  Calendar,
+  Clock,
+  Smile,
+  BarChart3,
 };
 
 interface SlashCommandMenuProps {

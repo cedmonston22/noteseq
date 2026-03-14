@@ -22,7 +22,8 @@ export default function TemplatePickerModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Choose a Template">
+    <Modal isOpen={isOpen} onClose={onClose} title="Choose a Template" maxWidth="max-w-2xl">
+      <div className="max-h-[60vh] overflow-y-auto pr-1">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {/* Blank Page option */}
         <button
@@ -58,6 +59,7 @@ export default function TemplatePickerModal({
             </span>
           </button>
         ))}
+      </div>
       </div>
     </Modal>
   );

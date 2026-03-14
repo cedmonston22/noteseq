@@ -70,4 +70,14 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: "image", label: "Image", description: "Upload or embed an image", icon: "Image", category: "Media" },
   // Actions
   { id: "import", label: "Import", description: "Import from file", icon: "Upload", category: "Actions" },
+  // Formatting
+  { id: "highlight", label: "Highlight", description: "Highlighted text", icon: "Highlighter", category: "Formatting" },
+  // Advanced
+  { id: "table-of-contents", label: "Table of Contents", description: "Auto-generated from headings", icon: "ListTree", category: "Advanced" },
+  // Inline
+  { id: "date", label: "Date", description: "Insert current date", icon: "Calendar", category: "Inline" },
+  { id: "time", label: "Time", description: "Insert current time", icon: "Clock", category: "Inline" },
+  { id: "emoji", label: "Emoji", description: "Insert an emoji", icon: "Smile", category: "Inline" },
+  { id: "calendar-block", label: "Calendar", description: "Interactive mini calendar", icon: "Calendar", category: "Advanced" },
+  { id: "chart-block", label: "Chart", description: "Bar, line, pie, or area chart", icon: "BarChart3", category: "Advanced" },
 ];

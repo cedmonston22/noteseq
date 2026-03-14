@@ -145,6 +145,7 @@ export default function EditorPage({
     ? (JSON.parse(pageData.content) as Record<string, unknown>)
     : undefined;
 
+
   // Extract backlink target page IDs from editor content JSON
   const extractBacklinkTargets = useCallback(
     (node: Record<string, unknown>): string[] => {
@@ -312,8 +313,9 @@ export default function EditorPage({
 
 
         {/* Editor */}
+        {/* Key includes content hash so editor remounts when content first loads */}
         <NoteEditor
-          key={`editor-${pageId || "new"}`}
+          key={`editor-${pageId || "new"}-${parsedContent ? "loaded" : "empty"}`}
           content={parsedContent}
           onUpdate={handleEditorUpdate}
           pageId={pageId}

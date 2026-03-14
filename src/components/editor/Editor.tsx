@@ -13,11 +13,58 @@ import Underline from "@tiptap/extension-underline";
 import Highlight from "@tiptap/extension-highlight";
 import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { Extension, InputRule } from "@tiptap/core";
 import { common, createLowlight } from "lowlight";
 import SlashCommandMenu from "./SlashCommandMenu";
 import BacklinkSuggestion from "./BacklinkSuggestion";
+import { CalendarNode } from "./CalendarExtension";
+import { ChartNode } from "./ChartExtension";
 
 const lowlight = createLowlight(common);
+
+/**
+ * Input rule: typing `[] ` at the start of a line converts to an unchecked task item.
+ * Typing `[x] ` converts to a checked task item.
+ */
+const TaskListInputRuleExtension = Extension.create({
+  name: "taskListInputRule",
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /^\[( |x)?\]\s$/,
+        handler: ({ state, range, match }) => {
+          const checked = match[1] === "x";
+          const { tr } = state;
+
+          // Delete the typed text
+          tr.delete(range.from, range.to);
+
+          // Check if we can convert the current node to a task list
+          const $from = tr.selection.$from;
+          const node = $from.parent;
+
+          if (node.type.name === "paragraph" && node.content.size === 0) {
+            const taskItemType = state.schema.nodes.taskItem;
+            const taskListType = state.schema.nodes.taskList;
+
+            if (taskItemType && taskListType) {
+              const taskItem = taskItemType.create(
+                { checked },
+                state.schema.nodes.paragraph.create()
+              );
+              const taskList = taskListType.create(null, taskItem);
+
+              // Replace the parent paragraph (or list item) with a task list
+              const pos = $from.before($from.depth);
+              const end = $from.after($from.depth);
+              tr.replaceWith(pos, end, taskList);
+            }
+          }
+        },
+      }),
+    ];
+  },
+});
 
 interface EditorProps {
   content?: Record<string, unknown>;
@@ -46,6 +93,7 @@ export default function NoteEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingContent = useRef(false);
+  const hasReceivedServerContent = useRef(!!content);
 
   // Debounced onUpdate: saves 300ms after the user stops typing
   const debouncedOnUpdate = useMemo(() => {
@@ -74,6 +122,7 @@ export default function NoteEditor({
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
+        horizontalRule: false,
       }),
       Placeholder.configure({
         placeholder: "Type '/' for commands...",
@@ -95,6 +144,9 @@ export default function NoteEditor({
       Highlight.configure({ multicolor: true }),
       HorizontalRule,
       CodeBlockLowlight.configure({ lowlight }),
+      TaskListInputRuleExtension,
+      CalendarNode,
+      ChartNode,
     ],
     content: content || {
       type: "doc",
@@ -109,6 +161,9 @@ export default function NoteEditor({
     },
     onUpdate: ({ editor: ed }) => {
       if (isLoadingContent.current) return;
+      // Don't save until we've loaded content from server at least once
+      // This prevents overwriting template content with empty doc
+      if (!hasReceivedServerContent.current) return;
       const json = ed.getJSON() as Record<string, unknown>;
       lastSavedContent.current = JSON.stringify(json);
       debouncedOnUpdate?.(json);
@@ -132,6 +187,7 @@ export default function NoteEditor({
     if (incomingJson === currentJson) return;
 
     isLoadingContent.current = true;
+    hasReceivedServerContent.current = true;
     editor.commands.setContent(content);
     lastSavedContent.current = incomingJson;
     setTimeout(() => {
@@ -343,6 +399,58 @@ export default function NoteEditor({
         case "callout":
           // Insert as a blockquote styled as callout
           editor.chain().focus().toggleBlockquote().run();
+          break;
+        case "highlight":
+          editor.chain().focus().toggleHighlight().run();
+          break;
+        case "table-of-contents": {
+          // Collect headings from the document and insert as a linked list
+          const headings: string[] = [];
+          editor.state.doc.descendants((node) => {
+            if (node.type.name === "heading" && node.textContent) {
+              const level = node.attrs.level as number;
+              const indent = level > 1 ? "\u00A0\u00A0".repeat(level - 1) : "";
+              headings.push(`${indent}${node.textContent}`);
+            }
+          });
+          const tocText = headings.length > 0 ? headings.join("\n") : "No headings found yet";
+          editor
+            .chain()
+            .focus()
+            .insertContent([
+              { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Table of Contents" }] },
+              { type: "paragraph", content: [{ type: "text", text: tocText }] },
+              { type: "horizontalRule" },
+            ])
+            .run();
+          break;
+        }
+        case "date": {
+          const today = new Date().toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+          editor.chain().focus().insertContent(today).run();
+          break;
+        }
+        case "time": {
+          const now = new Date().toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          });
+          editor.chain().focus().insertContent(now).run();
+          break;
+        }
+        case "emoji":
+          editor.chain().focus().insertContent("\u{1F60A}").run();
+          break;
+        case "calendar-block":
+          editor.chain().focus().insertContent({ type: "calendarBlock" }).run();
+          break;
+        case "chart-block":
+          editor.chain().focus().insertContent({ type: "chartBlock" }).run();
           break;
         default:
           break;

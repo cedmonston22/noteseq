@@ -10,6 +10,7 @@ import SearchModal from "@/components/ui/SearchModal";
 import ImportModal from "@/components/import/ImportModal";
 import ShareModal from "@/components/sharing/ShareModal";
 import TemplatePickerModal from "@/components/ui/TemplatePickerModal";
+import KeyboardShortcuts from "@/components/ui/KeyboardShortcuts";
 import { api } from "../../../convex/_generated/api";
 import type { PageTemplate } from "@/lib/templates";
 
@@ -26,6 +27,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [hasWaited, setHasWaited] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const createPageMutation = useMutation(api.pages.createPage);
 
   // Listen for search toggle events from Sidebar button and SearchModal's Cmd+K
@@ -62,6 +64,27 @@ export default function AppShell({ children }: AppShellProps) {
       // ignore
     }
   }, [createPageMutation, router]);
+
+  // Global `?` key listener for keyboard shortcuts modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "?") {
+        const target = e.target as HTMLElement;
+        const tagName = target.tagName.toLowerCase();
+        const isEditable =
+          tagName === "input" ||
+          tagName === "textarea" ||
+          target.isContentEditable ||
+          target.closest(".ProseMirror") !== null;
+        if (!isEditable) {
+          e.preventDefault();
+          setShortcutsOpen((prev) => !prev);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   useEffect(() => {
     window.addEventListener("noteseq:toggle-search", handleToggleSearch);
@@ -148,6 +171,10 @@ export default function AppShell({ children }: AppShellProps) {
           isOpen={templatePickerOpen}
           onClose={() => setTemplatePickerOpen(false)}
           onSelect={handleTemplateSelect}
+        />
+        <KeyboardShortcuts
+          isOpen={shortcutsOpen}
+          onClose={() => setShortcutsOpen(false)}
         />
       </div>
     </ToastProvider>
