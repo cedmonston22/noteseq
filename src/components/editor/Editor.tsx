@@ -57,7 +57,7 @@ export default function NoteEditor({
       }
       debounceTimerRef.current = setTimeout(() => {
         onUpdate(content);
-      }, 500);
+      }, 300);
     };
   }, [onUpdate]);
 
