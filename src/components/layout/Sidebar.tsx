@@ -271,13 +271,6 @@ export default function Sidebar() {
           collapsed={collapsed}
         />
         <NavItem
-          href="/calendar"
-          icon={Calendar}
-          label="Calendar"
-          active={pathname === "/calendar"}
-          collapsed={collapsed}
-        />
-        <NavItem
           href="/graph"
           icon={GitBranch}
           label="Graph View"
