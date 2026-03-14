@@ -10,6 +10,7 @@ import { parseMarkdown, extractTitle } from "@/lib/parsers/markdown";
 import { parseLogseq } from "@/lib/parsers/logseq";
 import { parseHTML } from "@/lib/parsers/html";
 import { parsePlainText } from "@/lib/parsers/plaintext";
+import { parseNotionZip } from "@/lib/parsers/notion";
 
 type ImportFormat = "auto" | "markdown" | "logseq" | "notion" | "html" | "plaintext";
 
@@ -100,16 +101,43 @@ export default function ImportModal({ isOpen, onClose }: ImportModalProps) {
 
     const activeFormat = format === "auto" ? detectFormat(file.name) : format;
 
-    if (activeFormat === "notion") {
-      setStatus("error");
-      setErrorMessage("Notion .zip import is coming soon. Please export as Markdown from Notion and import the .md file instead.");
-      return;
-    }
-
     setStatus("importing");
     setErrorMessage("");
 
     try {
+      // Notion .zip import — creates multiple pages
+      if (activeFormat === "notion") {
+        const pages = await parseNotionZip(file);
+        if (pages.length === 0) {
+          setStatus("error");
+          setErrorMessage("No markdown files found in the zip. Make sure you exported from Notion as Markdown.");
+          return;
+        }
+
+        let lastPageId: string | null = null;
+        for (const page of pages) {
+          const pageId = await createPage({
+            title: page.title.slice(0, 100),
+            isJournal: false,
+          });
+          await updateContent({
+            pageId,
+            content: JSON.stringify(page.content),
+          });
+          lastPageId = pageId;
+        }
+
+        setStatus("success");
+        setErrorMessage(`Imported ${pages.length} page${pages.length > 1 ? "s" : ""}`);
+
+        setTimeout(() => {
+          handleClose();
+          if (lastPageId) router.push(`/p/${lastPageId}`);
+        }, 800);
+        return;
+      }
+
+      // Single file import
       const text = await file.text();
       let title: string;
       let content: Record<string, unknown>;
@@ -141,13 +169,11 @@ export default function ImportModal({ isOpen, onClose }: ImportModalProps) {
         }
       }
 
-      // Create the page
       const pageId = await createPage({
         title: title.slice(0, 100),
         isJournal: false,
       });
 
-      // Update content
       await updateContent({
         pageId,
         content: JSON.stringify(content),
@@ -155,7 +181,6 @@ export default function ImportModal({ isOpen, onClose }: ImportModalProps) {
 
       setStatus("success");
 
-      // Navigate to the new page after a brief delay
       setTimeout(() => {
         handleClose();
         router.push(`/p/${pageId}`);
@@ -209,7 +234,7 @@ export default function ImportModal({ isOpen, onClose }: ImportModalProps) {
                   Drop a file here or click to browse
                 </p>
                 <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                  Supports .md, .html, .txt files
+                  Supports .md, .html, .txt, and Notion .zip exports
                 </p>
               </div>
             </>
@@ -257,7 +282,7 @@ export default function ImportModal({ isOpen, onClose }: ImportModalProps) {
           <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: "rgba(16, 185, 129, 0.1)" }}>
             <CheckCircle size={16} style={{ color: "#10B981" }} />
             <span className="text-sm" style={{ color: "#10B981" }}>
-              Imported successfully! Redirecting...
+              {errorMessage || "Imported successfully!"} Redirecting...
             </span>
           </div>
         )}
