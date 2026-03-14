@@ -1,0 +1,350 @@
+import { v } from "convex/values";
+import { query, mutation } from "./_generated/server";
+import {
+  getAuthenticatedUser,
+  validateEmail,
+  validateStringLength,
+} from "./auth.helpers";
+
+const MAX_TITLE_LENGTH = 100;
+
+export const getPage = query({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) return null;
+
+    if (page.ownerId === user._id) return page;
+
+    const collab = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .filter((q) => q.eq(q.field("userId"), user._id))
+      .first();
+
+    if (collab) return page;
+    return null;
+  },
+});
+
+export const getUserPages = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getAuthenticatedUser(ctx);
+    return await ctx.db
+      .query("pages")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .filter((q) => q.eq(q.field("isJournal"), false))
+      .collect();
+  },
+});
+
+export const getSharedPages = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getAuthenticatedUser(ctx);
+    const collabs = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    const pages = await Promise.all(
+      collabs.map((c) => ctx.db.get(c.pageId))
+    );
+    return pages.filter(Boolean);
+  },
+});
+
+export const getJournalPage = query({
+  args: { date: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    return await ctx.db
+      .query("pages")
+      .withIndex("by_journal", (q) =>
+        q.eq("ownerId", user._id).eq("isJournal", true).eq("journalDate", args.date)
+      )
+      .first();
+  },
+});
+
+export const getJournalPages = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getAuthenticatedUser(ctx);
+    return await ctx.db
+      .query("pages")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .filter((q) => q.eq(q.field("isJournal"), true))
+      .collect();
+  },
+});
+
+export const createPage = mutation({
+  args: {
+    title: v.string(),
+    icon: v.optional(v.string()),
+    isJournal: v.boolean(),
+    journalDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    validateStringLength(args.title, MAX_TITLE_LENGTH, "Title");
+
+    const now = Date.now();
+    return await ctx.db.insert("pages", {
+      title: args.title,
+      icon: args.icon,
+      ownerId: user._id,
+      isJournal: args.isJournal,
+      journalDate: args.journalDate,
+      isShared: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+export const createJournalIfNotExists = mutation({
+  args: { date: v.string(), title: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    validateStringLength(args.title, MAX_TITLE_LENGTH, "Title");
+
+    const existing = await ctx.db
+      .query("pages")
+      .withIndex("by_journal", (q) =>
+        q.eq("ownerId", user._id).eq("isJournal", true).eq("journalDate", args.date)
+      )
+      .first();
+
+    if (existing) return existing._id;
+
+    const now = Date.now();
+    return await ctx.db.insert("pages", {
+      title: args.title,
+      ownerId: user._id,
+      isJournal: true,
+      journalDate: args.date,
+      isShared: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+export const updatePage = mutation({
+  args: {
+    pageId: v.id("pages"),
+    title: v.optional(v.string()),
+    icon: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+
+    // Check ownership or collaborator access
+    if (page.ownerId !== user._id) {
+      const collab = await ctx.db
+        .query("pageCollaborators")
+        .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+        .filter((q) => q.eq(q.field("userId"), user._id))
+        .first();
+      if (!collab) throw new Error("Not authorized");
+    }
+
+    if (args.title !== undefined) {
+      validateStringLength(args.title, MAX_TITLE_LENGTH, "Title");
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    if (args.title !== undefined) updates.title = args.title;
+    if (args.icon !== undefined) updates.icon = args.icon;
+    await ctx.db.patch(args.pageId, updates);
+  },
+});
+
+export const deletePage = mutation({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+    if (page.ownerId !== user._id) throw new Error("Not authorized — only the owner can delete");
+
+    // Delete collaborators
+    const collabs = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .collect();
+    for (const c of collabs) await ctx.db.delete(c._id);
+
+    // Delete backlinks
+    const sourceLinks = await ctx.db
+      .query("backlinks")
+      .withIndex("by_source", (q) => q.eq("sourcePageId", args.pageId))
+      .collect();
+    for (const l of sourceLinks) await ctx.db.delete(l._id);
+
+    const targetLinks = await ctx.db
+      .query("backlinks")
+      .withIndex("by_target", (q) => q.eq("targetPageId", args.pageId))
+      .collect();
+    for (const l of targetLinks) await ctx.db.delete(l._id);
+
+    await ctx.db.delete(args.pageId);
+  },
+});
+
+export const updateYjsState = mutation({
+  args: { pageId: v.id("pages"), yjsState: v.bytes() },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+
+    // Check ownership or collaborator access
+    if (page.ownerId !== user._id) {
+      const collab = await ctx.db
+        .query("pageCollaborators")
+        .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+        .filter((q) => q.eq(q.field("userId"), user._id))
+        .first();
+      if (!collab) throw new Error("Not authorized");
+    }
+
+    await ctx.db.patch(args.pageId, {
+      yjsState: args.yjsState,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const sharePage = mutation({
+  args: {
+    pageId: v.id("pages"),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+
+    if (!validateEmail(args.email)) {
+      throw new Error("Invalid email format");
+    }
+
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+    if (page.ownerId !== user._id) throw new Error("Not authorized — only the owner can share");
+
+    const targetUser = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .first();
+    if (!targetUser) throw new Error("No account found for that email");
+    if (targetUser._id === user._id) throw new Error("Cannot share with yourself");
+
+    const existing = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .filter((q) => q.eq(q.field("userId"), targetUser._id))
+      .first();
+    if (existing) throw new Error("Already shared with this user");
+
+    await ctx.db.insert("pageCollaborators", {
+      pageId: args.pageId,
+      userId: targetUser._id,
+      invitedBy: user._id,
+      addedAt: Date.now(),
+    });
+
+    if (!page.isShared) {
+      await ctx.db.patch(args.pageId, { isShared: true });
+    }
+  },
+});
+
+export const unsharePage = mutation({
+  args: {
+    pageId: v.id("pages"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+    if (page.ownerId !== user._id) throw new Error("Not authorized — only the owner can manage sharing");
+
+    const collab = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .first();
+    if (collab) await ctx.db.delete(collab._id);
+
+    const remaining = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .collect();
+    if (remaining.length === 0) {
+      await ctx.db.patch(args.pageId, { isShared: false });
+    }
+  },
+});
+
+export const getCollaborators = query({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+
+    // Only owner or collaborator can see collaborator list
+    if (page.ownerId !== user._id) {
+      const collab = await ctx.db
+        .query("pageCollaborators")
+        .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+        .filter((q) => q.eq(q.field("userId"), user._id))
+        .first();
+      if (!collab) throw new Error("Not authorized");
+    }
+
+    const collabs = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .collect();
+
+    const users = await Promise.all(
+      collabs.map((c) => ctx.db.get(c.userId))
+    );
+    return users.filter(Boolean);
+  },
+});
+
+export const searchPages = query({
+  args: { query: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    validateStringLength(args.query, 200, "Search query");
+    const searchLower = args.query.toLowerCase();
+
+    const ownedPages = await ctx.db
+      .query("pages")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .collect();
+
+    const collabs = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const sharedPages = await Promise.all(
+      collabs.map((c) => ctx.db.get(c.pageId))
+    );
+
+    const allPages = [...ownedPages, ...sharedPages.filter(Boolean)];
+    return allPages.filter((p) =>
+      p!.title.toLowerCase().includes(searchLower)
+    );
+  },
+});
