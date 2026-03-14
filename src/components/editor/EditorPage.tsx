@@ -163,6 +163,29 @@ export default function EditorPage({
         content={parsedContent}
       />
 
+      {/* Active collaborators bar */}
+      {remotePresence && remotePresence.length > 0 && (
+        <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-6 py-1.5">
+          <span className="text-[11px] text-[var(--text-muted)]">Editing now:</span>
+          {remotePresence.map((p) => (
+            <span
+              key={p.sessionId}
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+              style={{
+                background: "rgba(212,168,67,0.12)",
+                color: "#D4A843",
+              }}
+            >
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ background: "#10B981" }}
+              />
+              {p.userName}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Editor area */}
       <div className="flex-1 overflow-y-auto">
         {/* Journal date navigation */}
