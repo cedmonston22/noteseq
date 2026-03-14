@@ -321,6 +321,19 @@ export default function NoteEditor({
     setSlashMenuOpen(true);
   }, [editor]);
 
+  // Close slash menu when clicking outside
+  useEffect(() => {
+    if (!slashMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".slash-menu")) {
+        setSlashMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [slashMenuOpen]);
+
   if (!editor) return null;
 
   return (
