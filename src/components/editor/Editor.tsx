@@ -47,6 +47,8 @@ export default function NoteEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingContent = useRef(false);
+  const onCursorChangeRef = useRef(onCursorChange);
+  onCursorChangeRef.current = onCursorChange;
 
   // Debounced onUpdate: saves 300ms after the user stops typing
   const debouncedOnUpdate = useMemo(() => {
@@ -108,10 +110,13 @@ export default function NoteEditor({
       const json = ed.getJSON() as Record<string, unknown>;
       lastSavedContent.current = JSON.stringify(json);
       debouncedOnUpdate?.(json);
+      // Also send cursor position on content change
+      const { from, to } = ed.state.selection;
+      onCursorChangeRef.current?.(from, to);
     },
     onSelectionUpdate: ({ editor: ed }) => {
       const { from, to } = ed.state.selection;
-      onCursorChange?.(from, to);
+      onCursorChangeRef.current?.(from, to);
     },
   });
 
