@@ -43,6 +43,50 @@ export default function EditorPage({
 
   const convexPageId = pageId as Id<"pages"> | undefined;
 
+  // Per-tab session ID so same account in two tabs sees both cursors
+  const sessionIdRef = useRef(Math.random().toString(36).slice(2));
+  const sessionId = sessionIdRef.current;
+
+  // Presence: cursor sync via Convex
+  const updatePresenceMut = useMutation(api.presence.updatePresence);
+  const removePresenceMut = useMutation(api.presence.removePresence);
+  const remotePresence = useQuery(
+    api.presence.getPresence,
+    isAuthenticated && convexPageId ? { pageId: convexPageId, sessionId } : "skip"
+  );
+
+  const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleCursorChange = useCallback(
+    (from: number, to: number) => {
+      if (!convexPageId) return;
+      if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current);
+      cursorTimerRef.current = setTimeout(() => {
+        updatePresenceMut({ pageId: convexPageId, sessionId, cursor: { from, to } }).catch(() => {});
+      }, 500);
+    },
+    [convexPageId, sessionId, updatePresenceMut]
+  );
+
+  // Send heartbeat and clean up on unmount
+  useEffect(() => {
+    if (!convexPageId || !isAuthenticated) return;
+    const interval = setInterval(() => {
+      updatePresenceMut({ pageId: convexPageId, sessionId }).catch(() => {});
+    }, 5000);
+    return () => {
+      clearInterval(interval);
+      removePresenceMut({ pageId: convexPageId, sessionId }).catch(() => {});
+    };
+  }, [convexPageId, sessionId, isAuthenticated, updatePresenceMut, removePresenceMut]);
+
+  const remoteCursors = (remotePresence || [])
+    .filter((p) => p.cursor)
+    .map((p) => ({
+      userName: p.userName,
+      userColor: p.userColor,
+      from: p.cursor!.from,
+      to: p.cursor!.to,
+    }));
 
   // Backlinks query
   const backlinksData = useQuery(
@@ -209,6 +253,8 @@ export default function EditorPage({
           key={`editor-${pageId || "new"}`}
           content={parsedContent}
           onUpdate={handleEditorUpdate}
+          onCursorChange={handleCursorChange}
+          remoteCursors={remoteCursors}
         />
 
         {/* Backlinks panel */}

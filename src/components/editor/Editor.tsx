@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -17,15 +17,26 @@ import SlashCommandMenu from "./SlashCommandMenu";
 
 const lowlight = createLowlight(common);
 
+interface RemoteCursor {
+  userName: string;
+  userColor: string;
+  from: number;
+  to: number;
+}
+
 interface EditorProps {
   content?: Record<string, unknown>;
   onUpdate?: (content: Record<string, unknown>) => void;
+  onCursorChange?: (from: number, to: number) => void;
+  remoteCursors?: RemoteCursor[];
   editable?: boolean;
 }
 
 export default function NoteEditor({
   content,
   onUpdate,
+  onCursorChange,
+  remoteCursors = [],
   editable = true,
 }: EditorProps) {
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
@@ -35,10 +46,20 @@ export default function NoteEditor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLoadingContent = useRef(false);
 
-  // Debounced onUpdate: saves after user stops typing
-  const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
+  // Debounced onUpdate: saves 300ms after the user stops typing
+  const debouncedOnUpdate = useMemo(() => {
+    if (!onUpdate) return undefined;
+    return (content: Record<string, unknown>) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        onUpdate(content);
+      }, 500);
+    };
+  }, [onUpdate]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -83,21 +104,70 @@ export default function NoteEditor({
       },
     },
     onUpdate: ({ editor: ed }) => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = setTimeout(() => {
-        onUpdateRef.current?.(ed.getJSON() as Record<string, unknown>);
-      }, 1500);
+      if (isLoadingContent.current) return;
+      const json = ed.getJSON() as Record<string, unknown>;
+      lastSavedContent.current = JSON.stringify(json);
+      debouncedOnUpdate?.(json);
+    },
+    onSelectionUpdate: ({ editor: ed }) => {
+      const { from, to } = ed.state.selection;
+      onCursorChange?.(from, to);
     },
   });
 
-  // Load content once when it arrives from Convex (may be undefined on first render)
-  const hasLoaded = useRef(false);
+  // Track the last content we saved to avoid echo updates
+  const lastSavedContent = useRef<string>("");
+
+  // Update editor when content arrives from server (initial load or from another tab)
   useEffect(() => {
-    if (editor && content && !hasLoaded.current) {
-      editor.commands.setContent(content);
-      hasLoaded.current = true;
-    }
+    if (!editor || !content) return;
+
+    const incomingJson = JSON.stringify(content);
+
+    // Skip if this is the same content we just saved
+    if (incomingJson === lastSavedContent.current) return;
+
+    // Skip if editor already has this content
+    const currentJson = JSON.stringify(editor.getJSON());
+    if (incomingJson === currentJson) return;
+
+    isLoadingContent.current = true;
+    editor.commands.setContent(content);
+    lastSavedContent.current = incomingJson;
+    setTimeout(() => {
+      isLoadingContent.current = false;
+    }, 50);
   }, [editor, content]);
+
+  // Render remote cursors as DOM overlays
+  const [cursorElements, setCursorElements] = useState<{ userName: string; userColor: string; top: number; left: number }[]>([]);
+
+  useEffect(() => {
+    if (!editor || remoteCursors.length === 0 || !editorContainerRef.current) {
+      setCursorElements([]);
+      return;
+    }
+
+    const containerRect = editorContainerRef.current.getBoundingClientRect();
+    const elements = remoteCursors
+      .filter((c) => c.from > 0 && c.from <= editor.state.doc.content.size)
+      .map((cursor) => {
+        try {
+          const coords = editor.view.coordsAtPos(cursor.from);
+          return {
+            userName: cursor.userName,
+            userColor: cursor.userColor,
+            top: coords.top - containerRect.top,
+            left: coords.left - containerRect.left,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean) as { userName: string; userColor: string; top: number; left: number }[];
+
+    setCursorElements(elements);
+  }, [editor, remoteCursors]);
 
   // Slash command handling
   const handleKeyDown = useCallback(
@@ -259,6 +329,29 @@ export default function NoteEditor({
         className="mx-auto max-w-3xl px-8 py-8"
       />
 
+      {/* Remote cursors */}
+      {cursorElements.map((cursor, i) => (
+        <div
+          key={`cursor-${i}`}
+          className="collaboration-cursor__caret pointer-events-none absolute"
+          style={{
+            top: cursor.top,
+            left: cursor.left,
+            borderLeftColor: cursor.userColor,
+            borderLeftWidth: 2,
+            borderLeftStyle: "solid",
+            height: 20,
+            zIndex: 50,
+          }}
+        >
+          <span
+            className="collaboration-cursor__label"
+            style={{ backgroundColor: cursor.userColor }}
+          >
+            {cursor.userName}
+          </span>
+        </div>
+      ))}
 
       {slashMenuOpen && (
         <SlashCommandMenu
