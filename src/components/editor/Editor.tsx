@@ -337,7 +337,10 @@ export default function NoteEditor({
       {/* Floating + button on empty lines */}
       {addButtonPos && !slashMenuOpen && (
         <button
-          onClick={handleAddBlockClick}
+          onMouseDown={(e) => {
+            e.preventDefault(); // Prevent editor blur
+            handleAddBlockClick();
+          }}
           className="absolute z-10 flex h-6 w-6 items-center justify-center rounded-md transition-all hover:bg-[rgba(128,128,128,0.15)]"
           style={{
             top: addButtonPos.top,
