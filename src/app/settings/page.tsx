@@ -6,6 +6,7 @@ import { User, Palette, Info, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import { useTheme } from "@/lib/useTheme";
+import { useAuth } from "@/lib/useAuth";
 
 function SettingsCard({
   icon: Icon,
@@ -31,6 +32,7 @@ function SettingsCard({
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
+  const { user } = useAuth();
 
   return (
     <AppShell>
@@ -55,12 +57,20 @@ export default function SettingsPage() {
           >
             <SettingsCard icon={User} title="Profile">
               <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#D4A843] text-xl font-bold text-white">
-                  U
-                </div>
+                {user?.image || user?.avatarUrl ? (
+                  <img
+                    src={user.image || user.avatarUrl}
+                    alt={user.name || "User"}
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#D4A843] text-xl font-bold text-white">
+                    {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                  </div>
+                )}
                 <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">User</p>
-                  <p className="text-sm text-[var(--text-muted)]">user@example.com</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{user?.name || "User"}</p>
+                  <p className="text-sm text-[var(--text-muted)]">{user?.email || ""}</p>
                 </div>
               </div>
             </SettingsCard>
