@@ -32,6 +32,9 @@
   /* Hollow text stroke (light mode) */
   --hollow-stroke: #8B6D2E;
 
+  /* Tagline (light mode — darker gold for contrast) */
+  --tagline-color: #8B6D2E;
+
   /* Legacy aliases for dark-only components */
   --dark-void: #0A0A0F;
   --dark-surface: #111116;
@@ -64,6 +67,9 @@
 
     /* Hollow text stroke (dark mode) */
     --hollow-stroke: #D4A843;
+
+    /* Tagline (dark mode — bright gold) */
+    --tagline-color: #D4A843;
   }
 }
 
@@ -83,6 +89,7 @@ html.dark {
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-hover: rgba(255, 255, 255, 0.12);
   --hollow-stroke: #D4A843;
+  --tagline-color: #D4A843;
 }
 
 /* Explicit light class for manual toggle */
@@ -166,6 +173,15 @@ body {
   background: rgba(128, 128, 128, 0.35);
 }
 
+/* ── Scrollbar Hide Utility ── */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 /* ── Focus Ring ── */
 *:focus-visible {
   outline: 2px solid var(--color-border-focus);
@@ -193,8 +209,7 @@ a, button, input, select, textarea,
 .tagline-line {
   width: 60px;
   height: 2px;
-  background: var(--gold-300);
-  opacity: 0.7;
+  background: var(--tagline-color);
   flex-shrink: 0;
 }
 
@@ -204,8 +219,7 @@ a, button, input, select, textarea,
   font-weight: 700;
   letter-spacing: 6px;
   text-transform: uppercase;
-  color: var(--gold-300);
-  opacity: 0.85;
+  color: var(--tagline-color);
   flex-shrink: 0;
 }
 
