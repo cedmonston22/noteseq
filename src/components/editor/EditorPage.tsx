@@ -55,19 +55,7 @@ export default function EditorPage({
     isAuthenticated && convexPageId ? { pageId: convexPageId, sessionId } : "skip"
   );
 
-  const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleCursorChange = useCallback(
-    (from: number, to: number) => {
-      if (!convexPageId) return;
-      if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current);
-      cursorTimerRef.current = setTimeout(() => {
-        updatePresenceMut({ pageId: convexPageId, sessionId, cursor: { from, to } }).catch(() => {});
-      }, 500);
-    },
-    [convexPageId, sessionId, updatePresenceMut]
-  );
-
-  // Send heartbeat and clean up on unmount
+  // Send presence heartbeat and clean up on unmount
   useEffect(() => {
     if (!convexPageId || !isAuthenticated) return;
     const interval = setInterval(() => {
@@ -78,15 +66,6 @@ export default function EditorPage({
       removePresenceMut({ pageId: convexPageId, sessionId }).catch(() => {});
     };
   }, [convexPageId, sessionId, isAuthenticated, updatePresenceMut, removePresenceMut]);
-
-  const remoteCursors = (remotePresence || [])
-    .filter((p) => p.cursor)
-    .map((p) => ({
-      userName: p.userName,
-      userColor: p.userColor,
-      from: p.cursor!.from,
-      to: p.cursor!.to,
-    }));
 
   // Backlinks query
   const backlinksData = useQuery(
@@ -253,8 +232,6 @@ export default function EditorPage({
           key={`editor-${pageId || "new"}`}
           content={parsedContent}
           onUpdate={handleEditorUpdate}
-          onCursorChange={handleCursorChange}
-          remoteCursors={remoteCursors}
         />
 
         {/* Backlinks panel */}
