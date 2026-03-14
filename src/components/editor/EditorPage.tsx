@@ -2,13 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ChevronRight, ArrowUpRight, FileText, Wifi, WifiOff } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUpRight, FileText } from "lucide-react";
 import { useConvexAuth, useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import TopBar from "@/components/layout/TopBar";
 import NoteEditor from "./Editor";
-import { useYjs } from "@/lib/useYjs";
 import { useAuth } from "@/lib/useAuth";
 
 const PAGE_ICONS = [
@@ -42,14 +41,52 @@ export default function EditorPage({
   const { isAuthenticated } = useConvexAuth();
   const { user } = useAuth();
 
-  // Yjs collaboration via PartyKit
-  const { connected: yjsConnected } = useYjs({
-    roomId: pageId || "default",
-    userName: user?.name || user?.email || "Anonymous",
-    userColor: "#D4A843",
-    enabled: isAuthenticated && !!pageId,
-  });
   const convexPageId = pageId as Id<"pages"> | undefined;
+
+  // Per-tab session ID so same account in two tabs sees both cursors
+  const sessionIdRef = useRef(Math.random().toString(36).slice(2));
+  const sessionId = sessionIdRef.current;
+
+  // Presence: cursor sync via Convex
+  const updatePresenceMut = useMutation(api.presence.updatePresence);
+  const removePresenceMut = useMutation(api.presence.removePresence);
+  const remotePresence = useQuery(
+    api.presence.getPresence,
+    isAuthenticated && convexPageId ? { pageId: convexPageId, sessionId } : "skip"
+  );
+
+  const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleCursorChange = useCallback(
+    (from: number, to: number) => {
+      if (!convexPageId) return;
+      if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current);
+      cursorTimerRef.current = setTimeout(() => {
+        updatePresenceMut({ pageId: convexPageId, sessionId, cursor: { from, to } }).catch(() => {});
+      }, 50);
+    },
+    [convexPageId, sessionId, updatePresenceMut]
+  );
+
+  // Send heartbeat and clean up on unmount
+  useEffect(() => {
+    if (!convexPageId || !isAuthenticated) return;
+    const interval = setInterval(() => {
+      updatePresenceMut({ pageId: convexPageId, sessionId }).catch(() => {});
+    }, 5000);
+    return () => {
+      clearInterval(interval);
+      removePresenceMut({ pageId: convexPageId, sessionId }).catch(() => {});
+    };
+  }, [convexPageId, sessionId, isAuthenticated, updatePresenceMut, removePresenceMut]);
+
+  const remoteCursors = (remotePresence || [])
+    .filter((p) => p.cursor)
+    .map((p) => ({
+      userName: p.userName,
+      userColor: p.userColor,
+      from: p.cursor!.from,
+      to: p.cursor!.to,
+    }));
 
   // Backlinks query
   const backlinksData = useQuery(
@@ -210,29 +247,14 @@ export default function EditorPage({
           )}
         </div>
 
-        {/* Collaboration status indicator */}
-        {pageId && (
-          <div className="mx-auto max-w-3xl px-8">
-            <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-              {yjsConnected ? (
-                <>
-                  <Wifi size={12} className="text-emerald-500" />
-                  <span>Connected</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff size={12} className="text-[var(--text-muted)]" />
-                  <span>Offline</span>
-                </>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Editor */}
         <NoteEditor
+          key={`editor-${pageId || "new"}`}
           content={parsedContent}
           onUpdate={handleEditorUpdate}
+          onCursorChange={handleCursorChange}
+          remoteCursors={remoteCursors}
         />
 
         {/* Backlinks panel */}

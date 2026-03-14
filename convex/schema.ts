@@ -55,6 +55,20 @@ export default defineSchema({
     .index("by_target", ["targetPageId"])
     .index("by_source", ["sourcePageId"]),
 
+  presence: defineTable({
+    pageId: v.id("pages"),
+    userId: v.id("users"),
+    sessionId: v.string(),
+    userName: v.string(),
+    userColor: v.string(),
+    cursor: v.optional(v.object({
+      from: v.number(),
+      to: v.number(),
+    })),
+    lastSeen: v.number(),
+  })
+    .index("by_page_session", ["pageId", "sessionId"]),
+
   files: defineTable({
     storageId: v.id("_storage"),
     uploadedBy: v.id("users"),
