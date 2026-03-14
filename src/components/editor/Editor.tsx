@@ -90,6 +90,14 @@ export default function NoteEditor({
     },
   });
 
+  // Load content once when it arrives from Convex (may be undefined on first render)
+  const hasLoaded = useRef(false);
+  useEffect(() => {
+    if (editor && content && !hasLoaded.current) {
+      editor.commands.setContent(content);
+      hasLoaded.current = true;
+    }
+  }, [editor, content]);
 
   // Slash command handling
   const handleKeyDown = useCallback(
