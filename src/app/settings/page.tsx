@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Palette, Info, ArrowLeft, Check } from "lucide-react";
+import { User, Palette, Info, ArrowLeft, Check, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -117,9 +117,10 @@ export default function SettingsPage() {
                   ) : (
                     <button
                       onClick={() => setEditingName(true)}
-                      className="text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[#D4A843]"
+                      className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[#D4A843]"
                     >
                       {user?.name || "User"}
+                      <Pencil size={12} className="text-[var(--text-muted)]" />
                     </button>
                   )}
                   {saved && (
