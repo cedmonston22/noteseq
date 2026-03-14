@@ -3,10 +3,12 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useConvexAuth } from "convex/react";
+import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { ToastProvider } from "@/components/ui/Toast";
 import SearchModal from "@/components/ui/SearchModal";
 import ImportModal from "@/components/import/ImportModal";
+import ShareModal from "@/components/sharing/ShareModal";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -17,7 +19,9 @@ export default function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [sharePageId, setSharePageId] = useState<string | null>(null);
   const [hasWaited, setHasWaited] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Listen for search toggle events from Sidebar button and SearchModal's Cmd+K
   const handleToggleSearch = useCallback(() => {
@@ -28,14 +32,21 @@ export default function AppShell({ children }: AppShellProps) {
     setImportOpen((prev) => !prev);
   }, []);
 
+  const handleOpenShare = useCallback((e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    if (detail?.pageId) setSharePageId(detail.pageId);
+  }, []);
+
   useEffect(() => {
     window.addEventListener("noteseq:toggle-search", handleToggleSearch);
     window.addEventListener("noteseq:toggle-import", handleToggleImport);
+    window.addEventListener("noteseq:open-share", handleOpenShare);
     return () => {
       window.removeEventListener("noteseq:toggle-search", handleToggleSearch);
       window.removeEventListener("noteseq:toggle-import", handleToggleImport);
+      window.removeEventListener("noteseq:open-share", handleOpenShare);
     };
-  }, [handleToggleSearch, handleToggleImport]);
+  }, [handleToggleSearch, handleToggleImport, handleOpenShare]);
 
   // Wait a moment after loading completes before redirecting
   // This prevents a race where the auth token hasn't been processed yet
@@ -68,7 +79,27 @@ export default function AppShell({ children }: AppShellProps) {
   return (
     <ToastProvider>
       <div className="flex h-screen overflow-hidden bg-[var(--bg-surface)]">
-        <Sidebar />
+        {/* Mobile hamburger button */}
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="fixed left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--bg-elevated)] text-[var(--text-secondary)] shadow-md transition-colors hover:bg-[rgba(128,128,128,0.12)] md:hidden"
+          aria-label="Open sidebar"
+        >
+          <Menu size={20} />
+        </button>
+
+        {/* Mobile backdrop */}
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+
+        <Sidebar
+          mobileOpen={mobileSidebarOpen}
+          onMobileClose={() => setMobileSidebarOpen(false)}
+        />
         <main className="flex flex-1 flex-col overflow-hidden">
           {children}
         </main>
@@ -79,6 +110,11 @@ export default function AppShell({ children }: AppShellProps) {
         <ImportModal
           isOpen={importOpen}
           onClose={() => setImportOpen(false)}
+        />
+        <ShareModal
+          isOpen={sharePageId !== null}
+          onClose={() => setSharePageId(null)}
+          pageId={sharePageId ?? undefined}
         />
       </div>
     </ToastProvider>

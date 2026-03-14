@@ -54,14 +54,14 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 w-full max-w-lg px-6"
+        className="relative z-10 w-full max-w-lg px-4 md:px-6"
       >
         {/* Logo & Tagline */}
-        <div className="mb-12 flex flex-col items-center">
+        <div className="mb-8 flex flex-col items-center md:mb-12">
           {/* Blurred echo layer */}
           <div className="relative">
             <span
-              className="absolute inset-0 flex items-center justify-center text-[56px] font-black uppercase tracking-[4px]"
+              className="absolute inset-0 flex items-center justify-center text-[36px] font-black uppercase tracking-[4px] md:text-[56px]"
               style={{
                 WebkitTextStroke: isDark
                   ? "1.5px rgba(212,168,67,0.2)"
@@ -74,7 +74,7 @@ export default function LoginPage() {
               NOTESEQ
             </span>
             <h1
-              className="text-[56px] font-black uppercase tracking-[4px]"
+              className="text-[36px] font-black uppercase tracking-[4px] md:text-[56px]"
               style={{
                 backgroundImage: isDark
                   ? "linear-gradient(90deg, #8B6D2E, #D4A843, #F2D479, #FFF5D4, #F2D479, #D4A843, #8B6D2E, #D4A843)"

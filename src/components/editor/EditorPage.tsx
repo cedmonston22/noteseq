@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ChevronRight, ArrowUpRight, FileText } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUpRight, FileText, Plus } from "lucide-react";
 import { useConvexAuth, useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -94,6 +94,7 @@ export default function EditorPage({
 
   const updateContent = useMutation(api.pages.updateContent);
   const updatePage = useMutation(api.pages.updatePage);
+  const syncBacklinks = useMutation(api.backlinks.syncBacklinks);
 
   // Sync title from server when page data loads
   const hasSyncedTitle = useRef(false);
@@ -144,13 +145,61 @@ export default function EditorPage({
     ? (JSON.parse(pageData.content) as Record<string, unknown>)
     : undefined;
 
+  // Extract backlink target page IDs from editor content JSON
+  const extractBacklinkTargets = useCallback(
+    (node: Record<string, unknown>): string[] => {
+      const targets: string[] = [];
+      // Check marks on text nodes for links to /p/{pageId}
+      if (Array.isArray(node.marks)) {
+        for (const mark of node.marks) {
+          if (
+            mark &&
+            typeof mark === "object" &&
+            (mark as Record<string, unknown>).type === "link"
+          ) {
+            const attrs = (mark as Record<string, unknown>).attrs as
+              | Record<string, unknown>
+              | undefined;
+            if (attrs && typeof attrs.href === "string") {
+              const match = attrs.href.match(/^\/p\/(.+)$/);
+              if (match) {
+                targets.push(match[1]);
+              }
+            }
+          }
+        }
+      }
+      // Recurse into content array
+      if (Array.isArray(node.content)) {
+        for (const child of node.content) {
+          if (child && typeof child === "object") {
+            targets.push(
+              ...extractBacklinkTargets(child as Record<string, unknown>)
+            );
+          }
+        }
+      }
+      return targets;
+    },
+    []
+  );
+
   // Save editor content to Convex
   const handleEditorUpdate = useCallback(
     (content: Record<string, unknown>) => {
       if (!convexPageId) return;
       updateContent({ pageId: convexPageId, content: JSON.stringify(content) });
+
+      // Sync backlinks from content
+      const targetIds = [...new Set(extractBacklinkTargets(content))];
+      syncBacklinks({
+        sourcePageId: convexPageId,
+        targetPageIds: targetIds as Id<"pages">[],
+      }).catch(() => {
+        // Silently ignore backlink sync errors (e.g. invalid page IDs)
+      });
     },
-    [convexPageId, updateContent]
+    [convexPageId, updateContent, syncBacklinks, extractBacklinkTargets]
   );
 
   return (
@@ -192,19 +241,29 @@ export default function EditorPage({
         {journalNav}
 
         {/* Page title (large, in editor area) */}
-        <div className="mx-auto max-w-3xl px-8 pt-12 pb-2">
-          {/* Page icon picker */}
-          {!isJournal && convexPageId && (
-            <div className="relative mb-2">
-              <button
-                onClick={() => setIconPickerOpen(!iconPickerOpen)}
-                className="rounded px-1 py-0.5 text-2xl transition-colors hover:bg-[rgba(128,128,128,0.1)]"
-                title="Change icon"
-              >
-                {pageData?.icon || (
-                  <span className="text-sm text-[var(--text-muted)]">Add icon</span>
-                )}
-              </button>
+        <div className="mx-auto max-w-3xl px-4 pt-8 pb-2 md:px-8 md:pt-12">
+          {isJournal ? (
+            <h1 className="text-3xl font-bold tracking-tight text-[var(--text-primary)]">
+              {initialTitle}
+            </h1>
+          ) : (
+            <div className="relative flex items-center gap-2">
+              {/* Icon button — shows icon or + */}
+              {convexPageId && (
+                <button
+                  onClick={() => setIconPickerOpen(!iconPickerOpen)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[rgba(128,128,128,0.1)]"
+                  title={pageData?.icon ? "Change icon" : "Add icon"}
+                >
+                  {pageData?.icon ? (
+                    <span className="text-2xl">{pageData.icon}</span>
+                  ) : (
+                    <Plus size={18} className="text-[var(--text-muted)]" />
+                  )}
+                </button>
+              )}
+
+              {/* Icon picker dropdown */}
               <AnimatePresence>
                 {iconPickerOpen && (
                   <motion.div
@@ -212,32 +271,34 @@ export default function EditorPage({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute left-0 z-50 mt-1 grid grid-cols-10 gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-2 shadow-xl"
+                    className="absolute left-0 top-full z-50 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-2 shadow-xl"
                   >
-                    {PAGE_ICONS.map((emoji) => (
+                    <div className="grid grid-cols-10 gap-1">
+                      {PAGE_ICONS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleIconSelect(emoji)}
+                          className="rounded p-1 text-lg transition-colors hover:bg-[rgba(128,128,128,0.12)]"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                    {pageData?.icon && (
                       <button
-                        key={emoji}
-                        onClick={() => handleIconSelect(emoji)}
-                        className="rounded p-1 text-lg transition-colors hover:bg-[rgba(128,128,128,0.12)]"
+                        onClick={() => {
+                          updatePage({ pageId: convexPageId!, icon: "" });
+                          setIconPickerOpen(false);
+                        }}
+                        className="mt-1 w-full rounded-md px-2 py-1 text-xs text-[var(--text-muted)] transition-colors hover:bg-[rgba(128,128,128,0.08)] hover:text-[var(--text-primary)]"
                       >
-                        {emoji}
+                        Remove icon
                       </button>
-                    ))}
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
-          )}
 
-          {isJournal ? (
-            <h1 className="text-3xl font-bold tracking-tight text-[var(--text-primary)]">
-              {initialTitle}
-            </h1>
-          ) : (
-            <div className="flex items-center gap-3">
-              {pageData?.icon && (
-                <span className="text-3xl">{pageData.icon}</span>
-              )}
               <input
                 type="text"
                 value={title}
@@ -255,10 +316,11 @@ export default function EditorPage({
           key={`editor-${pageId || "new"}`}
           content={parsedContent}
           onUpdate={handleEditorUpdate}
+          pageId={pageId}
         />
 
         {/* Backlinks panel */}
-        <div className="mx-auto max-w-3xl px-8 pb-20">
+        <div className="mx-auto max-w-3xl px-4 pb-20 md:px-8">
           <div className="border-t border-[var(--border-subtle)] pt-6">
             <button
               onClick={() => setBacklinksOpen(!backlinksOpen)}

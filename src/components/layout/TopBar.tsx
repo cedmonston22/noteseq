@@ -45,7 +45,10 @@ export default function TopBar({
 
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/80 px-6 backdrop-blur-xl">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/80 px-3 backdrop-blur-xl md:gap-4 md:px-6">
+        {/* Spacer for mobile hamburger button */}
+        <div className="w-9 shrink-0 md:hidden" />
+
         {/* Page title */}
         <input
           type="text"
@@ -57,11 +60,11 @@ export default function TopBar({
         />
 
         {/* Spacer */}
-        <div className="flex-1" />
+        <div className="hidden flex-1 md:block" />
 
-        {/* Presence */}
+        {/* Presence — hidden on mobile */}
         {showPresence && (
-          <div className="shrink-0">
+          <div className="hidden shrink-0 md:block">
             <PresenceAvatars />
           </div>
         )}
@@ -69,10 +72,10 @@ export default function TopBar({
         {/* Actions */}
         <button
           onClick={() => setShareOpen(true)}
-          className="flex h-8 items-center gap-2 rounded-lg border border-[var(--border-subtle)] px-3 text-xs font-medium text-[var(--text-secondary)] transition-all hover:border-[var(--border-hover)] hover:bg-[rgba(128,128,128,0.08)] hover:text-[var(--text-primary)]"
+          className="flex h-8 items-center gap-2 rounded-lg border border-[var(--border-subtle)] px-2 text-xs font-medium text-[var(--text-secondary)] transition-all hover:border-[var(--border-hover)] hover:bg-[rgba(128,128,128,0.08)] hover:text-[var(--text-primary)] md:px-3"
         >
           <Share2 size={13} />
-          Share
+          <span className="hidden md:inline">Share</span>
         </button>
 
         {/* More options dropdown */}

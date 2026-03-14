@@ -80,7 +80,10 @@ export default function ShareModal({ isOpen, onClose, pageId }: ShareModalProps)
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const inviteUrl = pageId
+        ? `${window.location.origin}/invite/${pageId}`
+        : window.location.href;
+      await navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -205,7 +208,7 @@ export default function ShareModal({ isOpen, onClose, pageId }: ShareModalProps)
           }}
         >
           <Link size={15} />
-          {copied ? "Link copied!" : "Copy page link"}
+          {copied ? "Link copied!" : "Copy invite link"}
         </button>
       </div>
     </Modal>

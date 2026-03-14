@@ -21,15 +21,26 @@ export default defineSchema({
     .index("by_googleId", ["googleId"])
     .index("phone", ["phone"]),
 
+  folders: defineTable({
+    name: v.string(),
+    icon: v.optional(v.string()),
+    ownerId: v.id("users"),
+    parentId: v.optional(v.id("folders")), // for nested folders
+    createdAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"]),
+
   pages: defineTable({
     title: v.string(),
     icon: v.optional(v.string()),
     ownerId: v.id("users"),
+    folderId: v.optional(v.id("folders")),
     isJournal: v.boolean(),
     journalDate: v.optional(v.string()),
     isShared: v.boolean(),
     content: v.optional(v.string()), // JSON-serialized TipTap content
     yjsState: v.optional(v.bytes()),
+    sortOrder: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -41,6 +52,7 @@ export default defineSchema({
     pageId: v.id("pages"),
     userId: v.id("users"),
     invitedBy: v.id("users"),
+    status: v.optional(v.string()), // "pending" | "accepted" | "declined" — optional for backwards compat
     addedAt: v.number(),
   })
     .index("by_page", ["pageId"])

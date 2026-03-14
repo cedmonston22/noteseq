@@ -51,6 +51,7 @@ export const getSharedPages = query({
     const collabs = await ctx.db
       .query("pageCollaborators")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.neq(q.field("status"), "pending"))
       .collect();
 
     const pages = await Promise.all(
@@ -93,6 +94,7 @@ export const createPage = mutation({
     icon: v.optional(v.string()),
     isJournal: v.boolean(),
     journalDate: v.optional(v.string()),
+    folderId: v.optional(v.id("folders")),
   },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
@@ -103,6 +105,7 @@ export const createPage = mutation({
       title: args.title,
       icon: args.icon,
       ownerId: user._id,
+      folderId: args.folderId,
       isJournal: args.isJournal,
       journalDate: args.journalDate,
       isShared: false,
@@ -283,6 +286,7 @@ export const sharePage = mutation({
       pageId: args.pageId,
       userId: targetUser._id,
       invitedBy: user._id,
+      status: "pending",
       addedAt: Date.now(),
     });
 
@@ -375,6 +379,108 @@ export const searchPages = query({
     return allPages.filter((p) =>
       p!.title.toLowerCase().includes(searchLower)
     );
+  },
+});
+
+export const reorderPage = mutation({
+  args: {
+    pageId: v.id("pages"),
+    sortOrder: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+    if (page.ownerId !== user._id) throw new Error("Not authorized");
+    await ctx.db.patch(args.pageId, { sortOrder: args.sortOrder });
+  },
+});
+
+export const acceptInvite = mutation({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const page = await ctx.db.get(args.pageId);
+    if (!page) throw new Error("Page not found");
+    if (page.ownerId === user._id) throw new Error("You own this page");
+
+    const existing = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .filter((q) => q.eq(q.field("userId"), user._id))
+      .first();
+
+    if (existing) {
+      // Update status to accepted
+      await ctx.db.patch(existing._id, { status: "accepted" });
+    } else {
+      // Via invite link — create as accepted
+      await ctx.db.insert("pageCollaborators", {
+        pageId: args.pageId,
+        userId: user._id,
+        invitedBy: page.ownerId,
+        status: "accepted",
+        addedAt: Date.now(),
+      });
+    }
+
+    if (!page.isShared) {
+      await ctx.db.patch(args.pageId, { isShared: true });
+    }
+  },
+});
+
+export const declineInvite = mutation({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+
+    const existing = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .filter((q) => q.eq(q.field("userId"), user._id))
+      .first();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+
+      // Check if any collaborators remain
+      const remaining = await ctx.db
+        .query("pageCollaborators")
+        .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+        .collect();
+      if (remaining.length === 0) {
+        await ctx.db.patch(args.pageId, { isShared: false });
+      }
+    }
+  },
+});
+
+export const getPendingInvites = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getOptionalUser(ctx);
+    if (!user) return [];
+
+    const collabs = await ctx.db
+      .query("pageCollaborators")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .collect();
+
+    const pages = await Promise.all(
+      collabs.map(async (c) => {
+        const page = await ctx.db.get(c.pageId);
+        const inviter = await ctx.db.get(c.invitedBy);
+        return page ? {
+          _id: page._id,
+          title: page.title,
+          icon: page.icon,
+          inviterName: inviter?.name || inviter?.email || "Someone",
+        } : null;
+      })
+    );
+    return pages.filter(Boolean);
   },
 });
 

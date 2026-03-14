@@ -15,6 +15,7 @@ import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import SlashCommandMenu from "./SlashCommandMenu";
+import BacklinkSuggestion from "./BacklinkSuggestion";
 
 const lowlight = createLowlight(common);
 
@@ -22,17 +23,25 @@ interface EditorProps {
   content?: Record<string, unknown>;
   onUpdate?: (content: Record<string, unknown>) => void;
   editable?: boolean;
+  pageId?: string;
 }
 
 export default function NoteEditor({
   content,
   onUpdate,
   editable = true,
+  pageId,
 }: EditorProps) {
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
   const [slashFilter, setSlashFilter] = useState("");
   const slashRangeRef = useRef<{ from: number; to: number } | null>(null);
+
+  // Backlink suggestion state
+  const [backlinkMenuOpen, setBacklinkMenuOpen] = useState(false);
+  const [backlinkMenuPos, setBacklinkMenuPos] = useState({ top: 0, left: 0 });
+  const [backlinkFilter, setBacklinkFilter] = useState("");
+  const backlinkRangeRef = useRef<{ from: number } | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,8 +78,13 @@ export default function NoteEditor({
       Placeholder.configure({
         placeholder: "Type '/' for commands...",
       }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
+      TaskList.configure({
+        HTMLAttributes: { class: "task-list" },
+      }),
+      TaskItem.configure({
+        nested: false,
+        HTMLAttributes: { class: "task-item" },
+      }),
       Image.configure({ inline: false }),
       Link.configure({
         openOnClick: false,
@@ -125,12 +139,39 @@ export default function NoteEditor({
     }, 50);
   }, [editor, content]);
 
-  // Slash command handling
+  // Slash command and backlink handling
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!editor) return;
 
-      if (e.key === "/" && !slashMenuOpen) {
+      // Detect `[` to potentially start a backlink `[[`
+      if (e.key === "[" && !backlinkMenuOpen && !slashMenuOpen) {
+        const { from } = editor.state.selection;
+        const textBefore = editor.state.doc.textBetween(
+          Math.max(0, from - 1),
+          from
+        );
+        if (textBefore === "[") {
+          // User just typed the second `[` — open backlink menu
+          setTimeout(() => {
+            const coords = editor.view.coordsAtPos(from);
+            const containerRect = editorContainerRef.current?.getBoundingClientRect();
+            if (containerRect) {
+              setBacklinkMenuPos({
+                top: coords.bottom - containerRect.top + 4,
+                left: coords.left - containerRect.left,
+              });
+            }
+            // from - 1 is the position of the first `[`, from + 1 will be after the second `[`
+            backlinkRangeRef.current = { from: from - 1 };
+            setBacklinkFilter("");
+            setBacklinkMenuOpen(true);
+          }, 10);
+          return;
+        }
+      }
+
+      if (e.key === "/" && !slashMenuOpen && !backlinkMenuOpen) {
         // Check if we're at the start of a line or after a space
         const { from } = editor.state.selection;
         const textBefore = editor.state.doc.textBetween(
@@ -154,7 +195,7 @@ export default function NoteEditor({
         }
       }
     },
-    [editor, slashMenuOpen]
+    [editor, slashMenuOpen, backlinkMenuOpen]
   );
 
   useEffect(() => {
@@ -189,6 +230,68 @@ export default function NoteEditor({
       editor.off("update", handler);
     };
   }, [editor, slashMenuOpen]);
+
+  // Track typing after `[[` for backlink filtering
+  useEffect(() => {
+    if (!editor || !backlinkMenuOpen) return;
+
+    const handler = () => {
+      const range = backlinkRangeRef.current;
+      if (!range) return;
+      const { from } = editor.state.selection;
+      // Cursor moved before the `[[` start
+      if (from <= range.from + 2) {
+        setBacklinkMenuOpen(false);
+        return;
+      }
+      const text = editor.state.doc.textBetween(range.from, from);
+      if (!text.startsWith("[[")) {
+        setBacklinkMenuOpen(false);
+        return;
+      }
+      const query = text.slice(2);
+      // If user typed `]]`, close the menu
+      if (query.endsWith("]]")) {
+        setBacklinkMenuOpen(false);
+        return;
+      }
+      setBacklinkFilter(query);
+    };
+
+    editor.on("update", handler);
+    return () => {
+      editor.off("update", handler);
+    };
+  }, [editor, backlinkMenuOpen]);
+
+  // Handle backlink page selection
+  const handleBacklinkSelect = useCallback(
+    (pageId: string, pageTitle: string) => {
+      if (!editor || !backlinkRangeRef.current) return;
+
+      const bracketStart = backlinkRangeRef.current.from;
+      const currentPos = editor.state.selection.from;
+
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: bracketStart, to: currentPos })
+        .insertContent({
+          type: "text",
+          text: pageTitle,
+          marks: [
+            {
+              type: "link",
+              attrs: { href: `/p/${pageId}`, class: "backlink-ref" },
+            },
+          ],
+        })
+        .run();
+
+      setBacklinkMenuOpen(false);
+    },
+    [editor]
+  );
 
   const handleSlashSelect = useCallback(
     (commandId: string) => {
@@ -334,6 +437,19 @@ export default function NoteEditor({
     return () => document.removeEventListener("mousedown", handler);
   }, [slashMenuOpen]);
 
+  // Close backlink menu when clicking outside
+  useEffect(() => {
+    if (!backlinkMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".slash-menu")) {
+        setBacklinkMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [backlinkMenuOpen]);
+
   if (!editor) return null;
 
   return (
@@ -377,6 +493,15 @@ export default function NoteEditor({
           filter={slashFilter}
           onSelect={handleSlashSelect}
           onClose={() => setSlashMenuOpen(false)}
+        />
+      )}
+
+      {backlinkMenuOpen && (
+        <BacklinkSuggestion
+          position={backlinkMenuPos}
+          query={backlinkFilter}
+          onSelect={handleBacklinkSelect}
+          onClose={() => setBacklinkMenuOpen(false)}
         />
       )}
     </div>
