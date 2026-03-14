@@ -7,6 +7,7 @@ import {
   Plus,
   Upload,
   CalendarDays,
+  Calendar,
   Share2,
   GitBranch,
   ChevronLeft,
@@ -267,6 +268,13 @@ export default function Sidebar() {
           icon={CalendarDays}
           label="Journal"
           active={pathname.startsWith("/journal")}
+          collapsed={collapsed}
+        />
+        <NavItem
+          href="/calendar"
+          icon={Calendar}
+          label="Calendar"
+          active={pathname === "/calendar"}
           collapsed={collapsed}
         />
         <NavItem
