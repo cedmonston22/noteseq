@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Palette, Info, ArrowLeft } from "lucide-react";
+import { User, Palette, Info, ArrowLeft, Check } from "lucide-react";
 import Link from "next/link";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import AppShell from "@/components/layout/AppShell";
 import { useTheme } from "@/lib/useTheme";
 import { useAuth } from "@/lib/useAuth";
@@ -33,6 +35,14 @@ function SettingsCard({
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
+  const updateProfile = useMutation(api.users.updateProfile);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (user?.name) setNameValue(user.name);
+  }, [user?.name]);
 
   return (
     <AppShell>
@@ -68,8 +78,53 @@ export default function SettingsPage() {
                     {user?.name?.charAt(0)?.toUpperCase() || "U"}
                   </div>
                 )}
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{user?.name || "User"}</p>
+                <div className="flex-1">
+                  {editingName ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={nameValue}
+                        onChange={(e) => setNameValue(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter") {
+                            try {
+                              await updateProfile({ name: nameValue.trim() });
+                              setSaved(true); setTimeout(() => setSaved(false), 2000);
+                              setEditingName(false);
+                            } catch { /* failed */ }
+                          }
+                          if (e.key === "Escape") {
+                            setNameValue(user?.name || "");
+                            setEditingName(false);
+                          }
+                        }}
+                        autoFocus
+                        className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-3 py-1.5 text-sm font-medium text-[var(--text-primary)] outline-none focus:border-[#D4A843]"
+                      />
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateProfile({ name: nameValue.trim() });
+                            setSaved(true); setTimeout(() => setSaved(false), 2000);
+                            setEditingName(false);
+                          } catch { /* failed */ }
+                        }}
+                        className="rounded-md bg-[#D4A843] p-1.5 text-white transition-colors hover:bg-[#B8892E]"
+                      >
+                        <Check size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingName(true)}
+                      className="text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[#D4A843]"
+                    >
+                      {user?.name || "User"}
+                    </button>
+                  )}
+                  {saved && (
+                    <p className="text-xs text-[#10B981]">Saved!</p>
+                  )}
                   <p className="text-sm text-[var(--text-muted)]">{user?.email || ""}</p>
                 </div>
               </div>
