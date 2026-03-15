@@ -1,46 +1,48 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import * as Y from "yjs";
 import YPartyKitProvider from "y-partykit/provider";
 
 const PARTYKIT_HOST =
   process.env.NEXT_PUBLIC_PARTYKIT_HOST || "noteseq.cedmonston22.partykit.dev";
 
+interface YjsState {
+  doc: Y.Doc | null;
+  provider: YPartyKitProvider | null;
+  synced: boolean;
+  ready: boolean; // true once doc + provider are created (before sync)
+}
+
 export function useYjs(pageId?: string) {
-  const [synced, setSynced] = useState(false);
-  const docRef = useRef<Y.Doc | null>(null);
-  const providerRef = useRef<YPartyKitProvider | null>(null);
-  const [, forceUpdate] = useState(0);
+  const [state, setState] = useState<YjsState>({
+    doc: null,
+    provider: null,
+    synced: false,
+    ready: false,
+  });
 
   useEffect(() => {
     if (!pageId) {
-      docRef.current = null;
-      providerRef.current = null;
-      setSynced(false);
-      forceUpdate((n) => n + 1);
+      setState({ doc: null, provider: null, synced: false, ready: false });
       return;
     }
 
     const doc = new Y.Doc();
     const provider = new YPartyKitProvider(PARTYKIT_HOST, pageId, doc);
 
-    docRef.current = doc;
-    providerRef.current = provider;
-    setSynced(false);
-    forceUpdate((n) => n + 1);
+    setState({ doc, provider, synced: false, ready: true });
 
     const onSynced = ({ synced: isSynced }: { synced: boolean }) => {
       if (isSynced) {
-        setSynced(true);
+        setState((prev) => ({ ...prev, synced: true }));
       }
     };
 
     provider.on("synced", onSynced);
 
-    // Check if already synced (in case the event fired before we subscribed)
     if (provider.synced) {
-      setSynced(true);
+      setState((prev) => ({ ...prev, synced: true }));
     }
 
     return () => {
@@ -48,15 +50,9 @@ export function useYjs(pageId?: string) {
       provider.disconnect();
       provider.destroy();
       doc.destroy();
-      docRef.current = null;
-      providerRef.current = null;
-      setSynced(false);
+      setState({ doc: null, provider: null, synced: false, ready: false });
     };
   }, [pageId]);
 
-  return {
-    doc: docRef.current,
-    provider: providerRef.current,
-    synced,
-  };
+  return state;
 }

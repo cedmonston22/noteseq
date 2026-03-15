@@ -136,13 +136,18 @@ export default function NoteEditor({
     };
   }, []);
 
-  // Build extensions list
-  const extensions = useMemo(() => {
+  // Build extensions list — only once on mount.
+  // The editor component is keyed by pageId so it remounts for new pages.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extensionsRef = useRef<any[] | null>(null);
+  if (!extensionsRef.current) {
     const exts = [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
         horizontalRule: false,
+        // Disable built-in undo/redo when using Yjs — Collaboration provides its own
+        ...(isCollaborative ? { undoRedo: false } : {}),
       }),
       Placeholder.configure({
         placeholder: "Type '/' for commands...",
@@ -186,8 +191,9 @@ export default function NoteEditor({
       );
     }
 
-    return exts;
-  }, [isCollaborative, yjsDoc, yjsProvider, userName, userColor]);
+    extensionsRef.current = exts;
+  }
+  const extensions = extensionsRef.current;
 
   const editor = useEditor({
     extensions,

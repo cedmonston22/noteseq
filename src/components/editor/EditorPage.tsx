@@ -49,8 +49,17 @@ export default function EditorPage({
   const sessionIdRef = useRef(Math.random().toString(36).slice(2));
   const sessionId = sessionIdRef.current;
 
-  // Real-time collaboration via Yjs + PartyKit
-  const { doc: yjsDoc, provider: yjsProvider, synced: yjsSynced } = useYjs(pageId);
+  // Load page data first — we need to know if it's shared before configuring collaboration
+  const pageData = useQuery(
+    api.pages.getPage,
+    isAuthenticated && convexPageId ? { pageId: convexPageId } : "skip"
+  );
+
+  // Only use Yjs for shared pages — personal pages use the simpler Convex sync
+  const isSharedPage = pageData?.isShared === true;
+  const { doc: yjsDoc, provider: yjsProvider, synced: yjsSynced, ready: yjsReady } = useYjs(
+    isSharedPage ? pageId : undefined
+  );
 
   // Pick a stable color for this user based on their session
   const userColor = COLLAB_COLORS[
@@ -96,11 +105,6 @@ export default function EditorPage({
             icon: b.sourcePage.icon || "\u{1F4C4}",
           }))
       : [];
-
-  const pageData = useQuery(
-    api.pages.getPage,
-    isAuthenticated && convexPageId ? { pageId: convexPageId } : "skip"
-  );
 
   const updateContent = useMutation(api.pages.updateContent);
   const updatePage = useMutation(api.pages.updatePage);
@@ -213,8 +217,17 @@ export default function EditorPage({
     [convexPageId, updateContent, syncBacklinks, extractBacklinkTargets]
   );
 
-  // Determine if we should use Yjs for this page
-  const useCollaboration = !!yjsDoc && !!yjsProvider;
+  // Wait for pageData before deciding how to render the editor.
+  // For shared pages: also wait for Yjs.
+  // For personal pages: render once we have content from Convex.
+  const yjsIsReady = isSharedPage && yjsReady && !!yjsDoc && !!yjsProvider;
+  const editorReady = !convexPageId
+    ? true                        // New page (no ID): ready immediately
+    : pageData === undefined
+      ? false                     // Still loading page data
+      : isSharedPage
+        ? yjsIsReady              // Shared page: wait for Yjs
+        : true;                   // Personal page: ready immediately
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -326,20 +339,26 @@ export default function EditorPage({
 
 
         {/* Editor */}
-        <NoteEditor
-          key={useCollaboration
-            ? `editor-collab-${pageId || "new"}`
-            : `editor-${pageId || "new"}-${parsedContent ? "loaded" : "empty"}`
-          }
-          content={parsedContent}
-          onUpdate={handleEditorUpdate}
-          pageId={pageId}
-          yjsDoc={useCollaboration ? yjsDoc : null}
-          yjsProvider={useCollaboration ? yjsProvider : null}
-          yjsSynced={yjsSynced}
-          userName={user?.name || user?.email || "Anonymous"}
-          userColor={userColor}
-        />
+        {editorReady ? (
+          <NoteEditor
+            key={yjsIsReady
+              ? `editor-collab-${pageId}`
+              : `editor-${pageId || "new"}-${parsedContent ? "loaded" : "empty"}`
+            }
+            content={parsedContent}
+            onUpdate={handleEditorUpdate}
+            pageId={pageId}
+            yjsDoc={yjsIsReady ? yjsDoc : null}
+            yjsProvider={yjsIsReady ? yjsProvider : null}
+            yjsSynced={yjsSynced}
+            userName={user?.name || user?.email || "Anonymous"}
+            userColor={userColor}
+          />
+        ) : (
+          <div className="mx-auto max-w-3xl px-8 py-8">
+            <div className="h-6 w-48 animate-pulse rounded bg-[rgba(128,128,128,0.08)]" />
+          </div>
+        )}
 
         {/* Backlinks panel */}
         <div className="mx-auto max-w-3xl px-4 pb-20 md:px-8">
