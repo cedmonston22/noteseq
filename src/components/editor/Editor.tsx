@@ -8,8 +8,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
-import Underline from "@tiptap/extension-underline";
+// Link and Underline are included in StarterKit v3 — configured there
 import Highlight from "@tiptap/extension-highlight";
 import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
@@ -146,6 +145,12 @@ export default function NoteEditor({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
         horizontalRule: false,
+        // Configure Link and Underline via StarterKit (they're included in v3)
+        link: {
+          openOnClick: false,
+          autolink: true,
+          HTMLAttributes: { class: "editor-link" },
+        },
         // Disable built-in undo/redo when using Yjs — Collaboration provides its own
         ...(isCollaborative ? { undoRedo: false } : {}),
       }),
@@ -160,12 +165,6 @@ export default function NoteEditor({
         HTMLAttributes: { class: "task-item" },
       }),
       Image.configure({ inline: false }),
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        HTMLAttributes: { class: "editor-link" },
-      }),
-      Underline,
       Highlight.configure({ multicolor: true }),
       HorizontalRule,
       CodeBlockLowlight.configure({ lowlight }),
@@ -174,15 +173,15 @@ export default function NoteEditor({
       ChartNode,
     ];
 
-    if (isCollaborative) {
+    if (isCollaborative && yjsDoc && yjsProvider) {
       exts.push(
         Collaboration.configure({
-          document: yjsDoc!,
+          document: yjsDoc,
         }) as typeof exts[number]
       );
       exts.push(
         CollaborationCursor.configure({
-          provider: yjsProvider!,
+          provider: yjsProvider,
           user: {
             name: userName || "Anonymous",
             color: userColor || "#D4A843",
