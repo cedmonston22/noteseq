@@ -13,8 +13,12 @@ import Underline from "@tiptap/extension-underline";
 import Highlight from "@tiptap/extension-highlight";
 import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import { Extension, InputRule } from "@tiptap/core";
 import { common, createLowlight } from "lowlight";
+import * as Y from "yjs";
+import type YPartyKitProvider from "y-partykit/provider";
 import SlashCommandMenu from "./SlashCommandMenu";
 import BacklinkSuggestion from "./BacklinkSuggestion";
 import { CalendarNode } from "./CalendarExtension";
@@ -71,6 +75,11 @@ interface EditorProps {
   onUpdate?: (content: Record<string, unknown>) => void;
   editable?: boolean;
   pageId?: string;
+  yjsDoc?: Y.Doc | null;
+  yjsProvider?: YPartyKitProvider | null;
+  yjsSynced?: boolean;
+  userName?: string;
+  userColor?: string;
 }
 
 export default function NoteEditor({
@@ -78,6 +87,11 @@ export default function NoteEditor({
   onUpdate,
   editable = true,
   pageId,
+  yjsDoc,
+  yjsProvider,
+  yjsSynced,
+  userName,
+  userColor,
 }: EditorProps) {
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
@@ -94,19 +108,24 @@ export default function NoteEditor({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingContent = useRef(false);
   const hasReceivedServerContent = useRef(!!content);
+  const hasInitializedYjs = useRef(false);
 
-  // Debounced onUpdate: saves 300ms after the user stops typing
+  const isCollaborative = !!yjsDoc && !!yjsProvider;
+
+  // Debounced onUpdate: saves after the user stops typing
   const debouncedOnUpdate = useMemo(() => {
     if (!onUpdate) return undefined;
+    // When using Yjs, debounce more aggressively since Yjs handles real-time sync
+    const delay = isCollaborative ? 2000 : 300;
     return (content: Record<string, unknown>) => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
       debounceTimerRef.current = setTimeout(() => {
         onUpdate(content);
-      }, 300);
+      }, delay);
     };
-  }, [onUpdate]);
+  }, [onUpdate, isCollaborative]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -117,8 +136,9 @@ export default function NoteEditor({
     };
   }, []);
 
-  const editor = useEditor({
-    extensions: [
+  // Build extensions list
+  const extensions = useMemo(() => {
+    const exts = [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
@@ -147,11 +167,35 @@ export default function NoteEditor({
       TaskListInputRuleExtension,
       CalendarNode,
       ChartNode,
-    ],
-    content: content || {
-      type: "doc",
-      content: [{ type: "paragraph" }],
-    },
+    ];
+
+    if (isCollaborative) {
+      exts.push(
+        Collaboration.configure({
+          document: yjsDoc!,
+        }) as typeof exts[number]
+      );
+      exts.push(
+        CollaborationCursor.configure({
+          provider: yjsProvider!,
+          user: {
+            name: userName || "Anonymous",
+            color: userColor || "#D4A843",
+          },
+        }) as typeof exts[number]
+      );
+    }
+
+    return exts;
+  }, [isCollaborative, yjsDoc, yjsProvider, userName, userColor]);
+
+  const editor = useEditor({
+    extensions,
+    // When using Yjs, don't pass content — Yjs is the source of truth.
+    // Content will be initialized from Convex after sync if the Yjs doc is empty.
+    content: isCollaborative
+      ? undefined
+      : content || { type: "doc", content: [{ type: "paragraph" }] },
     editable,
     immediatelyRender: false,
     editorProps: {
@@ -161,9 +205,7 @@ export default function NoteEditor({
     },
     onUpdate: ({ editor: ed }) => {
       if (isLoadingContent.current) return;
-      // Don't save until we've loaded content from server at least once
-      // This prevents overwriting template content with empty doc
-      if (!hasReceivedServerContent.current) return;
+      if (!isCollaborative && !hasReceivedServerContent.current) return;
       const json = ed.getJSON() as Record<string, unknown>;
       lastSavedContent.current = JSON.stringify(json);
       debouncedOnUpdate?.(json);
@@ -173,8 +215,38 @@ export default function NoteEditor({
   // Track the last content we saved to avoid echo updates
   const lastSavedContent = useRef<string>("");
 
-  // Update editor when content arrives from server (initial load or from another tab)
+  // Initialize Yjs doc from Convex content after sync (only if Yjs doc is empty)
   useEffect(() => {
+    if (!isCollaborative || !yjsSynced || !editor || hasInitializedYjs.current)
+      return;
+
+    // Check if the Yjs fragment has content
+    const fragment = yjsDoc!.getXmlFragment("default");
+    const isEmpty = fragment.length === 0;
+
+    if (!isEmpty) {
+      // Yjs doc already has content from server — no initialization needed
+      hasInitializedYjs.current = true;
+      return;
+    }
+
+    if (content) {
+      // Yjs doc is empty — initialize from Convex content
+      hasInitializedYjs.current = true;
+      isLoadingContent.current = true;
+      editor.commands.setContent(content);
+      lastSavedContent.current = JSON.stringify(content);
+      setTimeout(() => {
+        isLoadingContent.current = false;
+      }, 100);
+    }
+    // If Yjs is empty AND content hasn't loaded yet, don't mark initialized.
+    // The effect will re-run when content arrives from Convex.
+  }, [isCollaborative, yjsSynced, editor, content, yjsDoc]);
+
+  // For NON-collaborative mode: update editor when content arrives from server
+  useEffect(() => {
+    if (isCollaborative) return;
     if (!editor || !content) return;
 
     const incomingJson = JSON.stringify(content);
@@ -193,7 +265,7 @@ export default function NoteEditor({
     setTimeout(() => {
       isLoadingContent.current = false;
     }, 50);
-  }, [editor, content]);
+  }, [editor, content, isCollaborative]);
 
   // Slash command and backlink handling
   const handleKeyDown = useCallback(

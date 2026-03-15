@@ -9,10 +9,12 @@ import { Id } from "../../../convex/_generated/dataModel";
 import TopBar from "@/components/layout/TopBar";
 import NoteEditor from "./Editor";
 import { useAuth } from "@/lib/useAuth";
+import { useYjs } from "@/lib/useYjs";
+import { COLLAB_COLORS } from "@/lib/constants";
 
 const PAGE_ICONS = [
-  "📝", "💡", "🏗️", "🔌", "📚", "🎯", "🤝", "📋", "🚀", "💻",
-  "🎨", "📊", "🔒", "⚡", "🌟", "📌", "🔧", "💬", "📁", "✨",
+  "\u{1F4DD}", "\u{1F4A1}", "\u{1F3D7}\uFE0F", "\u{1F50C}", "\u{1F4DA}", "\u{1F3AF}", "\u{1F91D}", "\u{1F4CB}", "\u{1F680}", "\u{1F4BB}",
+  "\u{1F3A8}", "\u{1F4CA}", "\u{1F512}", "\u26A1", "\u{1F31F}", "\u{1F4CC}", "\u{1F527}", "\u{1F4AC}", "\u{1F4C1}", "\u2728",
 ];
 
 interface BacklinkItem {
@@ -46,6 +48,14 @@ export default function EditorPage({
   // Per-tab session ID so same account in two tabs sees both cursors
   const sessionIdRef = useRef(Math.random().toString(36).slice(2));
   const sessionId = sessionIdRef.current;
+
+  // Real-time collaboration via Yjs + PartyKit
+  const { doc: yjsDoc, provider: yjsProvider, synced: yjsSynced } = useYjs(pageId);
+
+  // Pick a stable color for this user based on their session
+  const userColor = COLLAB_COLORS[
+    Math.abs(sessionId.charCodeAt(0) + sessionId.charCodeAt(1)) % COLLAB_COLORS.length
+  ];
 
   // Presence: cursor sync via Convex
   const updatePresenceMut = useMutation(api.presence.updatePresence);
@@ -83,7 +93,7 @@ export default function EditorPage({
           .map((b) => ({
             id: b.sourcePage._id,
             title: b.sourcePage.title || "Untitled",
-            icon: b.sourcePage.icon || "📄",
+            icon: b.sourcePage.icon || "\u{1F4C4}",
           }))
       : [];
 
@@ -185,7 +195,7 @@ export default function EditorPage({
     []
   );
 
-  // Save editor content to Convex
+  // Save editor content to Convex (used for both Yjs and non-Yjs modes)
   const handleEditorUpdate = useCallback(
     (content: Record<string, unknown>) => {
       if (!convexPageId) return;
@@ -202,6 +212,9 @@ export default function EditorPage({
     },
     [convexPageId, updateContent, syncBacklinks, extractBacklinkTargets]
   );
+
+  // Determine if we should use Yjs for this page
+  const useCollaboration = !!yjsDoc && !!yjsProvider;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -313,12 +326,19 @@ export default function EditorPage({
 
 
         {/* Editor */}
-        {/* Key includes content hash so editor remounts when content first loads */}
         <NoteEditor
-          key={`editor-${pageId || "new"}-${parsedContent ? "loaded" : "empty"}`}
+          key={useCollaboration
+            ? `editor-collab-${pageId || "new"}`
+            : `editor-${pageId || "new"}-${parsedContent ? "loaded" : "empty"}`
+          }
           content={parsedContent}
           onUpdate={handleEditorUpdate}
           pageId={pageId}
+          yjsDoc={useCollaboration ? yjsDoc : null}
+          yjsProvider={useCollaboration ? yjsProvider : null}
+          yjsSynced={yjsSynced}
+          userName={user?.name || user?.email || "Anonymous"}
+          userColor={userColor}
         />
 
         {/* Backlinks panel */}
