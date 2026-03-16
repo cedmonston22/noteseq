@@ -9,8 +9,6 @@ import { Id } from "../../../convex/_generated/dataModel";
 import TopBar from "@/components/layout/TopBar";
 import NoteEditor from "./Editor";
 import { useAuth } from "@/lib/useAuth";
-import { useYjs } from "@/lib/useYjs";
-import { COLLAB_COLORS } from "@/lib/constants";
 
 const PAGE_ICONS = [
   "\u{1F4DD}", "\u{1F4A1}", "\u{1F3D7}\uFE0F", "\u{1F50C}", "\u{1F4DA}", "\u{1F3AF}", "\u{1F91D}", "\u{1F4CB}", "\u{1F680}", "\u{1F4BB}",
@@ -49,22 +47,10 @@ export default function EditorPage({
   const sessionIdRef = useRef(Math.random().toString(36).slice(2));
   const sessionId = sessionIdRef.current;
 
-  // Load page data first — we need to know if it's shared before configuring collaboration
   const pageData = useQuery(
     api.pages.getPage,
     isAuthenticated && convexPageId ? { pageId: convexPageId } : "skip"
   );
-
-  // Only use Yjs for shared pages — personal pages use the simpler Convex sync
-  const isSharedPage = pageData?.isShared === true;
-  const { doc: yjsDoc, provider: yjsProvider, synced: yjsSynced, ready: yjsReady } = useYjs(
-    isSharedPage ? pageId : undefined
-  );
-
-  // Pick a stable color for this user based on their session
-  const userColor = COLLAB_COLORS[
-    Math.abs(sessionId.charCodeAt(0) + sessionId.charCodeAt(1)) % COLLAB_COLORS.length
-  ];
 
   // Presence: cursor sync via Convex
   const updatePresenceMut = useMutation(api.presence.updatePresence);
@@ -217,17 +203,8 @@ export default function EditorPage({
     [convexPageId, updateContent, syncBacklinks, extractBacklinkTargets]
   );
 
-  // Wait for pageData before deciding how to render the editor.
-  // For shared pages: also wait for Yjs.
-  // For personal pages: render once we have content from Convex.
-  const yjsIsReady = isSharedPage && yjsReady && !!yjsDoc && !!yjsProvider;
-  const editorReady = !convexPageId
-    ? true                        // New page (no ID): ready immediately
-    : pageData === undefined
-      ? false                     // Still loading page data
-      : isSharedPage
-        ? yjsIsReady              // Shared page: wait for Yjs
-        : true;                   // Personal page: ready immediately
+  // Wait for pageData before rendering the editor so content is authoritative at mount time.
+  const editorReady = !convexPageId || pageData !== undefined;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -341,18 +318,10 @@ export default function EditorPage({
         {/* Editor */}
         {editorReady ? (
           <NoteEditor
-            key={yjsIsReady
-              ? `editor-collab-${pageId}`
-              : `editor-${pageId || "new"}-${parsedContent ? "loaded" : "empty"}`
-            }
+            key={`editor-${pageId || "new"}-${parsedContent ? "loaded" : "empty"}`}
             content={parsedContent}
             onUpdate={handleEditorUpdate}
             pageId={pageId}
-            yjsDoc={yjsIsReady ? yjsDoc : null}
-            yjsProvider={yjsIsReady ? yjsProvider : null}
-            yjsSynced={yjsSynced}
-            userName={user?.name || user?.email || "Anonymous"}
-            userColor={userColor}
           />
         ) : (
           <div className="mx-auto max-w-3xl px-8 py-8">

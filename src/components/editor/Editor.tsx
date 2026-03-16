@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -8,16 +8,11 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Image from "@tiptap/extension-image";
-// Link and Underline are included in StarterKit v3 — configured there
 import Highlight from "@tiptap/extension-highlight";
 import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
-import Collaboration from "@tiptap/extension-collaboration";
-import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import { Extension, InputRule } from "@tiptap/core";
 import { common, createLowlight } from "lowlight";
-import * as Y from "yjs";
-import type YPartyKitProvider from "y-partykit/provider";
 import SlashCommandMenu from "./SlashCommandMenu";
 import BacklinkSuggestion from "./BacklinkSuggestion";
 import { CalendarNode } from "./CalendarExtension";
@@ -74,11 +69,6 @@ interface EditorProps {
   onUpdate?: (content: Record<string, unknown>) => void;
   editable?: boolean;
   pageId?: string;
-  yjsDoc?: Y.Doc | null;
-  yjsProvider?: YPartyKitProvider | null;
-  yjsSynced?: boolean;
-  userName?: string;
-  userColor?: string;
 }
 
 export default function NoteEditor({
@@ -86,11 +76,6 @@ export default function NoteEditor({
   onUpdate,
   editable = true,
   pageId,
-  yjsDoc,
-  yjsProvider,
-  yjsSynced,
-  userName,
-  userColor,
 }: EditorProps) {
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
@@ -106,25 +91,20 @@ export default function NoteEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingContent = useRef(false);
-  const hasReceivedServerContent = useRef(!!content);
-  const hasInitializedYjs = useRef(false);
 
-  const isCollaborative = !!yjsDoc && !!yjsProvider;
-
-  // Debounced onUpdate: saves after the user stops typing
-  const debouncedOnUpdate = useMemo(() => {
-    if (!onUpdate) return undefined;
-    // When using Yjs, debounce more aggressively since Yjs handles real-time sync
-    const delay = isCollaborative ? 2000 : 300;
-    return (content: Record<string, unknown>) => {
+  // Debounced onUpdate: saves 300ms after the user stops typing
+  const debouncedOnUpdate = useCallback(
+    (json: Record<string, unknown>) => {
+      if (!onUpdate) return;
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
       debounceTimerRef.current = setTimeout(() => {
-        onUpdate(content);
-      }, delay);
-    };
-  }, [onUpdate, isCollaborative]);
+        onUpdate(json);
+      }, 300);
+    },
+    [onUpdate]
+  );
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -135,24 +115,18 @@ export default function NoteEditor({
     };
   }, []);
 
-  // Build extensions list — only once on mount.
-  // The editor component is keyed by pageId so it remounts for new pages.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const extensionsRef = useRef<any[] | null>(null);
-  if (!extensionsRef.current) {
-    const exts = [
+  const editor = useEditor({
+    extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
         horizontalRule: false,
-        // Configure Link and Underline via StarterKit (they're included in v3)
+        // Link and Underline are included in StarterKit v3
         link: {
           openOnClick: false,
           autolink: true,
           HTMLAttributes: { class: "editor-link" },
         },
-        // Disable built-in undo/redo when using Yjs — Collaboration provides its own
-        ...(isCollaborative ? { undoRedo: false } : {}),
       }),
       Placeholder.configure({
         placeholder: "Type '/' for commands...",
@@ -171,36 +145,11 @@ export default function NoteEditor({
       TaskListInputRuleExtension,
       CalendarNode,
       ChartNode,
-    ];
-
-    if (isCollaborative && yjsDoc && yjsProvider) {
-      exts.push(
-        Collaboration.configure({
-          document: yjsDoc,
-        }) as typeof exts[number]
-      );
-      exts.push(
-        CollaborationCursor.configure({
-          provider: yjsProvider,
-          user: {
-            name: userName || "Anonymous",
-            color: userColor || "#D4A843",
-          },
-        }) as typeof exts[number]
-      );
-    }
-
-    extensionsRef.current = exts;
-  }
-  const extensions = extensionsRef.current;
-
-  const editor = useEditor({
-    extensions,
-    // When using Yjs, don't pass content — Yjs is the source of truth.
-    // Content will be initialized from Convex after sync if the Yjs doc is empty.
-    content: isCollaborative
-      ? undefined
-      : content || { type: "doc", content: [{ type: "paragraph" }] },
+    ],
+    content: content || {
+      type: "doc",
+      content: [{ type: "paragraph" }],
+    },
     editable,
     immediatelyRender: false,
     editorProps: {
@@ -210,53 +159,22 @@ export default function NoteEditor({
     },
     onUpdate: ({ editor: ed }) => {
       if (isLoadingContent.current) return;
-      if (!isCollaborative && !hasReceivedServerContent.current) return;
       const json = ed.getJSON() as Record<string, unknown>;
       lastSavedContent.current = JSON.stringify(json);
-      debouncedOnUpdate?.(json);
+      debouncedOnUpdate(json);
     },
   });
 
   // Track the last content we saved to avoid echo updates
   const lastSavedContent = useRef<string>("");
 
-  // Initialize Yjs doc from Convex content after sync (only if Yjs doc is empty)
+  // Update editor when content arrives from server (e.g. collaborator made a change)
   useEffect(() => {
-    if (!isCollaborative || !yjsSynced || !editor || hasInitializedYjs.current)
-      return;
-
-    // Check if the Yjs fragment has content
-    const fragment = yjsDoc!.getXmlFragment("default");
-    const isEmpty = fragment.length === 0;
-
-    if (!isEmpty) {
-      // Yjs doc already has content from server — no initialization needed
-      hasInitializedYjs.current = true;
-      return;
-    }
-
-    if (content) {
-      // Yjs doc is empty — initialize from Convex content
-      hasInitializedYjs.current = true;
-      isLoadingContent.current = true;
-      editor.commands.setContent(content);
-      lastSavedContent.current = JSON.stringify(content);
-      setTimeout(() => {
-        isLoadingContent.current = false;
-      }, 100);
-    }
-    // If Yjs is empty AND content hasn't loaded yet, don't mark initialized.
-    // The effect will re-run when content arrives from Convex.
-  }, [isCollaborative, yjsSynced, editor, content, yjsDoc]);
-
-  // For NON-collaborative mode: update editor when content arrives from server
-  useEffect(() => {
-    if (isCollaborative) return;
     if (!editor || !content) return;
 
     const incomingJson = JSON.stringify(content);
 
-    // Skip if this is the same content we just saved
+    // Skip if this is the same content we just saved (echo from our own save)
     if (incomingJson === lastSavedContent.current) return;
 
     // Skip if editor already has this content
@@ -264,13 +182,12 @@ export default function NoteEditor({
     if (incomingJson === currentJson) return;
 
     isLoadingContent.current = true;
-    hasReceivedServerContent.current = true;
     editor.commands.setContent(content);
     lastSavedContent.current = incomingJson;
     setTimeout(() => {
       isLoadingContent.current = false;
     }, 50);
-  }, [editor, content, isCollaborative]);
+  }, [editor, content]);
 
   // Slash command and backlink handling
   const handleKeyDown = useCallback(
@@ -295,7 +212,6 @@ export default function NoteEditor({
                 left: coords.left - containerRect.left,
               });
             }
-            // from - 1 is the position of the first `[`, from + 1 will be after the second `[`
             backlinkRangeRef.current = { from: from - 1 };
             setBacklinkFilter("");
             setBacklinkMenuOpen(true);
@@ -305,7 +221,6 @@ export default function NoteEditor({
       }
 
       if (e.key === "/" && !slashMenuOpen && !backlinkMenuOpen) {
-        // Check if we're at the start of a line or after a space
         const { from } = editor.state.selection;
         const textBefore = editor.state.doc.textBetween(
           Math.max(0, from - 1),
@@ -372,7 +287,6 @@ export default function NoteEditor({
       const range = backlinkRangeRef.current;
       if (!range) return;
       const { from } = editor.state.selection;
-      // Cursor moved before the `[[` start
       if (from <= range.from + 2) {
         setBacklinkMenuOpen(false);
         return;
@@ -383,7 +297,6 @@ export default function NoteEditor({
         return;
       }
       const query = text.slice(2);
-      // If user typed `]]`, close the menu
       if (query.endsWith("]]")) {
         setBacklinkMenuOpen(false);
         return;
@@ -433,14 +346,12 @@ export default function NoteEditor({
       const { from } = slashRangeRef.current;
       const currentPos = editor.state.selection.from;
 
-      // Delete the slash text
       editor
         .chain()
         .focus()
         .deleteRange({ from: from, to: currentPos })
         .run();
 
-      // Insert appropriate block
       switch (commandId) {
         case "heading1":
           editor.chain().focus().toggleHeading({ level: 1 }).run();
@@ -470,18 +381,15 @@ export default function NoteEditor({
           editor.chain().focus().setHorizontalRule().run();
           break;
         case "image":
-          // Open file picker to select an image
           fileInputRef.current?.click();
           break;
         case "callout":
-          // Insert as a blockquote styled as callout
           editor.chain().focus().toggleBlockquote().run();
           break;
         case "highlight":
           editor.chain().focus().toggleHighlight().run();
           break;
         case "table-of-contents": {
-          // Collect headings from the document and insert as a linked list
           const headings: string[] = [];
           editor.state.doc.descendants((node) => {
             if (node.type.name === "heading" && node.textContent) {
@@ -545,17 +453,15 @@ export default function NoteEditor({
       const file = e.target.files?.[0];
       if (!file) return;
 
-      // Create a local object URL as preview
       const objectUrl = URL.createObjectURL(file);
       editor.chain().focus().setImage({ src: objectUrl, alt: file.name }).run();
 
-      // Reset the input so the same file can be selected again
       e.target.value = "";
     },
     [editor]
   );
 
-  // Floating "+" button on empty lines (like Notion)
+  // Floating "+" button on empty lines
   const [addButtonPos, setAddButtonPos] = useState<{ top: number } | null>(null);
 
   useEffect(() => {
@@ -639,7 +545,6 @@ export default function NoteEditor({
 
   return (
     <div ref={editorContainerRef} className="relative">
-      {/* Hidden file input for image uploads */}
       <input
         ref={fileInputRef}
         type="file"
@@ -648,11 +553,10 @@ export default function NoteEditor({
         className="hidden"
         aria-hidden="true"
       />
-      {/* Floating + button on empty lines */}
       {addButtonPos && !slashMenuOpen && (
         <button
           onMouseDown={(e) => {
-            e.preventDefault(); // Prevent editor blur
+            e.preventDefault();
             handleAddBlockClick();
           }}
           className="absolute z-10 flex h-6 w-6 items-center justify-center rounded-md transition-all hover:bg-[rgba(128,128,128,0.15)]"
